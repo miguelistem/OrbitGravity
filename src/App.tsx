@@ -25,7 +25,13 @@ import {
   Database, 
   Server, 
   Zap, 
-  Layers 
+  Layers,
+  Folder,
+  FolderPlus,
+  ChevronRight,
+  ChevronDown,
+  ListFilter,
+  PanelLeft
 } from 'lucide-react';
 
 export default function App() {
@@ -72,6 +78,12 @@ export default function App() {
 
   // Sidebar filter
   const [sidebarFilter, setSidebarFilter] = useState<'all' | 'running'>('all');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({});
+
+  const toggleFolder = (folderName: string) => {
+    setCollapsedFolders((prev) => ({ ...prev, [folderName]: !prev[folderName] }));
+  };
 
   // Modals
   const [isInstanceModalOpen, setIsInstanceModalOpen] = useState(false);
@@ -227,16 +239,23 @@ export default function App() {
     return true;
   });
 
-  const getInstanceIcon = (iconName: string) => {
-    switch (iconName) {
-      case 'cpu': return <Cpu className="w-3.5 h-3.5 text-[#7D818C]" />;
-      case 'database': return <Database className="w-3.5 h-3.5 text-[#7D818C]" />;
-      case 'zap': return <Zap className="w-3.5 h-3.5 text-[#7D818C]" />;
-      case 'layers': return <Layers className="w-3.5 h-3.5 text-[#7D818C]" />;
-      case 'server': return <Server className="w-3.5 h-3.5 text-[#7D818C]" />;
-      case 'code': return <Code className="w-3.5 h-3.5 text-[#7D818C]" />;
-      default: return <Terminal className="w-3.5 h-3.5 text-[#7D818C]" />;
+  const groupedInstances = filteredInstances.reduce<Record<string, AntigravityInstance[]>>((acc, inst) => {
+    const tag = inst.tag || 'General Workspaces';
+    if (!acc[tag]) acc[tag] = [];
+    acc[tag].push(inst);
+    return acc;
+  }, {});
+
+  const formatInstanceDurationBadge = (inst: AntigravityInstance) => {
+    if (inst.status === 'running') {
+      const elapsed = inst.totalElapsedSeconds;
+      if (elapsed < 60) return `${elapsed}s`;
+      if (elapsed < 3600) return `${Math.floor(elapsed / 60)}m`;
+      const hrs = Math.floor(elapsed / 3600);
+      const remainingMins = Math.floor((elapsed % 3600) / 60);
+      return remainingMins > 0 ? `${hrs}h ${remainingMins}m` : `${hrs}h`;
     }
+    return `:${inst.port}`;
   };
 
   const handleMinimizeWindow = async () => {
@@ -261,51 +280,53 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#0F1012] text-[#D8DADF] font-sans select-none">
-      {/* 1. OS Titlebar */}
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#0E0F12] text-[#D8DADF] font-sans select-none antialiased">
+      {/* 1. OS Titlebar (Seamlessly integrated with window) */}
       <div
         data-tauri-drag-region
-        className="h-8 bg-[#141518] border-b border-[#212328] flex items-center justify-between px-3 shrink-0 text-xs text-[#7D818C] select-none"
+        className="h-9 bg-[#111215] border-b border-[#1E2026] flex items-center justify-between px-3 shrink-0 text-xs text-[#8E92A0] select-none"
       >
-        {/* Left Window Menu with OrbitGravity Logo Glyph */}
+        {/* Left Window Menu with OrbitGravity Logo Glyph & Menu Items */}
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            <OrbitGravityLogo size={15} showSquircle={false} />
-            <span className="font-semibold text-zinc-100 tracking-tight">OrbitGravity</span>
+          <div className="flex items-center gap-2">
+            <OrbitGravityLogo size={16} showSquircle={false} />
+            <span className="font-semibold text-sm text-zinc-100 tracking-tight">OrbitGravity</span>
           </div>
-          <span className="hover:text-zinc-200 cursor-pointer">File</span>
-          <span className="hover:text-zinc-200 cursor-pointer">View</span>
-          <span className="hover:text-zinc-200 cursor-pointer">Window</span>
-          <span className="hover:text-zinc-200 cursor-pointer">Help</span>
+          <div className="flex items-center gap-2 text-xs text-zinc-400">
+            <span className="hover:text-zinc-200 cursor-pointer px-1.5 py-0.5 rounded hover:bg-zinc-800/50 transition">File</span>
+            <span className="hover:text-zinc-200 cursor-pointer px-1.5 py-0.5 rounded hover:bg-zinc-800/50 transition">View</span>
+            <span className="hover:text-zinc-200 cursor-pointer px-1.5 py-0.5 rounded hover:bg-zinc-800/50 transition">Window</span>
+            <span className="hover:text-zinc-200 cursor-pointer px-1.5 py-0.5 rounded hover:bg-zinc-800/50 transition">Help</span>
+          </div>
         </div>
 
         {/* Center Session Title */}
         <div
           data-tauri-drag-region
-          className="text-[11px] font-mono text-[#5E626E] truncate max-w-sm hidden sm:block pointer-events-none"
+          className="text-xs font-mono text-zinc-500 truncate max-w-sm hidden sm:block pointer-events-none"
         >
-          {activeInstance?.name ? `OrbitGravity — ${activeInstance.name}` : 'OrbitGravity IDE Fleet'}
+          {activeInstance?.name ? activeInstance.name : 'OrbitGravity Fleet'}
         </div>
 
         {/* Right Windows Control Buttons */}
-        <div className="flex items-center gap-3 text-xs pr-1">
+        <div className="flex items-center gap-0.5 text-xs pr-0.5">
           <button
             onClick={handleMinimizeWindow}
-            className="hover:text-zinc-200 hover:bg-zinc-800/60 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+            className="hover:text-zinc-200 hover:bg-zinc-800/80 w-8 h-7 flex items-center justify-center rounded cursor-pointer transition-colors"
             title="Minimize"
           >
             —
           </button>
           <button
             onClick={handleMaximizeWindow}
-            className="hover:text-zinc-200 hover:bg-zinc-800/60 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+            className="hover:text-zinc-200 hover:bg-zinc-800/80 w-8 h-7 flex items-center justify-center rounded cursor-pointer transition-colors"
             title="Maximize"
           >
             🗖
           </button>
           <button
             onClick={handleCloseWindow}
-            className="hover:text-red-400 hover:bg-red-950/60 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+            className="hover:text-red-300 hover:bg-red-900/80 w-8 h-7 flex items-center justify-center rounded cursor-pointer transition-colors"
             title="Close"
           >
             ✕
@@ -316,185 +337,253 @@ export default function App() {
       {/* 2. Main Body Container with Left Sidebar & Center Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* LEFT SIDEBAR - Desktop Shortcuts & Instances Hub */}
-        <aside className="w-64 bg-[#111214] border-r border-[#212328] flex flex-col justify-between shrink-0 select-none">
-          <div className="flex-1 overflow-y-auto p-3 space-y-3.5">
-            {/* Top Bar with OrbitGravity Squircle Logo */}
-            <div className="flex items-center justify-between pb-1">
+        <aside className={`${sidebarCollapsed ? 'w-16' : 'w-72 lg:w-[295px]'} bg-[#101114] border-r border-[#1E2026] flex flex-col justify-between shrink-0 select-none transition-all duration-200`}>
+          <div className="flex-1 overflow-y-auto p-3.5 space-y-4">
+            {/* Top Bar with OrbitGravity Squircle Logo & Controls (NO duplicate app name) */}
+            <div className="flex items-center justify-between pb-0.5 px-0.5">
               <div className="flex items-center gap-2.5">
-                <OrbitGravityLogo size={24} showSquircle={true} />
-                <span className="font-semibold text-xs tracking-tight text-zinc-100">
-                  OrbitGravity
-                </span>
+                <OrbitGravityLogo size={22} showSquircle={true} />
+                {!sidebarCollapsed && (
+                  <button
+                    onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                    className="p-1 text-zinc-400 hover:text-zinc-200 hover:bg-[#1C1E26] rounded cursor-pointer transition"
+                    title="Toggle Sidebar"
+                  >
+                    <PanelLeft className="w-4 h-4" />
+                  </button>
+                )}
               </div>
 
-              <div className="flex items-center gap-1 text-[#7D818C]">
-                <span className="hover:text-zinc-200 cursor-pointer p-0.5 text-xs">&lt;</span>
-                <span className="hover:text-zinc-200 cursor-pointer p-0.5 text-xs">&gt;</span>
-              </div>
+              {!sidebarCollapsed && (
+                <div className="flex items-center gap-1 text-zinc-400">
+                  <button className="p-1 hover:text-zinc-200 hover:bg-[#1C1E26] rounded text-xs cursor-pointer transition">&lt;</button>
+                  <button className="p-1 hover:text-zinc-200 hover:bg-[#1C1E26] rounded text-xs cursor-pointer transition">&gt;</button>
+                </div>
+              )}
             </div>
 
             {/* + New Instance Shortcut Profile button */}
-            <button
-              onClick={() => {
-                setEditingInstance(null);
-                setIsInstanceModalOpen(true);
-              }}
-              className="w-full py-1.5 px-3 bg-[#17181D] hover:bg-[#1E2026] text-zinc-200 rounded border border-[#262830] text-xs font-medium transition cursor-pointer flex items-center gap-2"
-            >
-              <Plus className="w-3.5 h-3.5 text-zinc-300" />
-              <span>New Instance Shortcut</span>
-            </button>
+            {!sidebarCollapsed ? (
+              <button
+                onClick={() => {
+                  setEditingInstance(null);
+                  setIsInstanceModalOpen(true);
+                }}
+                className="w-full py-2.5 px-3.5 bg-[#171920] hover:bg-[#1F222B] text-zinc-200 rounded-lg border border-[#272A34] text-sm font-medium transition cursor-pointer flex items-center gap-2.5 shadow-sm"
+              >
+                <Plus className="w-4 h-4 text-zinc-300" />
+                <span>New Instance Shortcut</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setEditingInstance(null);
+                  setIsInstanceModalOpen(true);
+                }}
+                className="w-full py-2 flex items-center justify-center bg-[#171920] hover:bg-[#1F222B] text-zinc-200 rounded-lg border border-[#272A34] transition cursor-pointer"
+                title="New Instance Shortcut"
+              >
+                <Plus className="w-4 h-4 text-zinc-300" />
+              </button>
+            )}
 
             {/* Global Navigation Links */}
-            <div className="space-y-0.5 text-xs text-[#8B8F9A]">
+            <div className="space-y-1 text-sm text-[#9498A5]">
               <button
                 onClick={() => setActiveViewTab('workspace')}
-                className={`w-full text-left px-2 py-1.5 rounded flex items-center gap-2 transition cursor-pointer ${
-                  activeViewTab === 'workspace' ? 'bg-[#18191E] text-zinc-100 font-medium' : 'hover:bg-[#16171B] hover:text-zinc-200'
+                className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-2.5 transition cursor-pointer ${
+                  activeViewTab === 'workspace'
+                    ? 'bg-[#1E212A] text-zinc-100 font-medium'
+                    : 'hover:bg-[#161820] hover:text-zinc-200'
                 }`}
+                title="Session Workspace"
               >
-                <History className="w-3.5 h-3.5 text-[#7D818C]" />
-                <span>Session Workspace</span>
+                <History className="w-4 h-4 text-[#8E92A0] shrink-0" />
+                {!sidebarCollapsed && <span>Session Workspace</span>}
               </button>
 
               <button
                 onClick={() => setActiveViewTab('shortcuts')}
-                className={`w-full text-left px-2 py-1.5 rounded flex items-center justify-between transition cursor-pointer ${
-                  activeViewTab === 'shortcuts' ? 'bg-[#18191E] text-zinc-100 font-medium' : 'hover:bg-[#16171B] hover:text-zinc-200'
+                className={`w-full text-left px-3 py-2 rounded-lg flex items-center justify-between transition cursor-pointer ${
+                  activeViewTab === 'shortcuts'
+                    ? 'bg-[#1E212A] text-zinc-100 font-medium'
+                    : 'hover:bg-[#161820] hover:text-zinc-200'
                 }`}
+                title="Desktop Shortcuts Hub"
               >
-                <div className="flex items-center gap-2">
-                  <Monitor className="w-3.5 h-3.5 text-[#7D818C]" />
-                  <span>Desktop Shortcuts Hub</span>
+                <div className="flex items-center gap-2.5">
+                  <Monitor className="w-4 h-4 text-[#8E92A0] shrink-0" />
+                  {!sidebarCollapsed && <span>Desktop Shortcuts Hub</span>}
                 </div>
-                <span className="text-[10px] font-mono text-[#5E626E]">{instances.length}</span>
+                {!sidebarCollapsed && (
+                  <span className="text-xs font-mono text-[#6E7382] px-1.5 py-0.2 rounded bg-[#161820]">{instances.length}</span>
+                )}
               </button>
 
               <button
                 onClick={() => setActiveViewTab('accounts')}
-                className={`w-full text-left px-2 py-1.5 rounded flex items-center justify-between transition cursor-pointer ${
-                  activeViewTab === 'accounts' ? 'bg-[#18191E] text-zinc-100 font-medium' : 'hover:bg-[#16171B] hover:text-zinc-200'
+                className={`w-full text-left px-3 py-2 rounded-lg flex items-center justify-between transition cursor-pointer ${
+                  activeViewTab === 'accounts'
+                    ? 'bg-[#1E212A] text-zinc-100 font-medium'
+                    : 'hover:bg-[#161820] hover:text-zinc-200'
                 }`}
+                title="Account Quotas"
               >
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="w-3.5 h-3.5 text-[#7D818C]" />
-                  <span>Account Quotas</span>
+                <div className="flex items-center gap-2.5">
+                  <ShieldCheck className="w-4 h-4 text-[#8E92A0] shrink-0" />
+                  {!sidebarCollapsed && <span>Account Quotas</span>}
                 </div>
-                <span className="text-[10px] text-zinc-400 font-mono">68%</span>
+                {!sidebarCollapsed && (
+                  <span className="text-xs text-zinc-400 font-mono">68%</span>
+                )}
               </button>
             </div>
 
-            {/* INSTANCES SECTION */}
-            <div className="pt-2 border-t border-[#1F2126]">
-              <div className="flex items-center justify-between text-[11px] text-[#6B7280] px-1 mb-1.5 font-mono">
-                <span className="text-zinc-300 font-medium uppercase tracking-wider text-[10px]">
-                  Instances ({filteredInstances.length})
-                </span>
-                <button
-                  onClick={() => setSidebarFilter(sidebarFilter === 'all' ? 'running' : 'all')}
-                  className={`text-[9px] px-1.5 py-0.2 rounded cursor-pointer ${
-                    sidebarFilter === 'running' ? 'bg-[#1E2026] text-zinc-200' : 'text-[#6B7280] hover:text-zinc-300'
-                  }`}
-                  title="Filter running instances"
-                >
-                  {sidebarFilter === 'running' ? 'Running' : 'All'}
-                </button>
-              </div>
-
-              {/* Clean Desktop Shortcut Items in Sidebar */}
-              <div className="space-y-1 text-xs font-sans">
-                {filteredInstances.map((inst) => {
-                  const isSelected = inst.id === activeInstanceId && activeViewTab === 'workspace';
-                  const isRunning = inst.status === 'running';
-
-                  return (
-                    <div
-                      key={inst.id}
-                      onClick={() => {
-                        setActiveInstanceId(inst.id);
-                        setActiveViewTab('workspace');
-                      }}
-                      className={`p-2 rounded border transition cursor-pointer flex flex-col gap-0.5 ${
-                        isSelected
-                          ? 'bg-[#1A1B20] border-[#2C2E38] text-zinc-100'
-                          : 'bg-[#141518] border-[#1F2026] hover:bg-[#18191E] hover:border-[#272932] text-[#8B8F9A]'
+            {/* PROJECTS / INSTANCES SECTION - Clean Antigravity Style */}
+            {!sidebarCollapsed && (
+              <div className="pt-2 border-t border-[#1C1E26]">
+                <div className="flex items-center justify-between text-xs text-zinc-400 px-2 py-1.5">
+                  <span className="font-semibold text-xs tracking-wider uppercase text-zinc-400">
+                    Projects
+                  </span>
+                  <div className="flex items-center gap-1.5 text-zinc-400">
+                    <button
+                      onClick={() => setSidebarFilter(sidebarFilter === 'all' ? 'running' : 'all')}
+                      className={`p-1 rounded hover:text-zinc-200 transition ${
+                        sidebarFilter === 'running' ? 'text-blue-400 bg-blue-500/10' : ''
                       }`}
+                      title={sidebarFilter === 'running' ? 'Showing running only' : 'Filter running instances'}
                     >
-                      {/* Top row: Icon, Name, Status dot */}
-                      <div className="flex items-center justify-between gap-2 min-w-0">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className="w-5 h-5 rounded bg-[#1A1B20] border border-[#24262E] flex items-center justify-center shrink-0">
-                            {getInstanceIcon(inst.icon)}
-                          </div>
-                          <span className="font-medium text-xs truncate text-zinc-200">
-                            {inst.name}
-                          </span>
+                      <ListFilter className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditingInstance(null);
+                        setIsInstanceModalOpen(true);
+                      }}
+                      className="p-1 rounded hover:text-zinc-200 transition"
+                      title="New Instance Shortcut"
+                    >
+                      <FolderPlus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Clean Hierarchical Vertical Nav (NO BOXES, NO HARD BORDERS) */}
+                <div className="space-y-2 mt-1">
+                  {Object.entries(groupedInstances).map(([groupName, items]) => {
+                    const isCollapsed = !!collapsedFolders[groupName];
+                    return (
+                      <div key={groupName} className="space-y-0.5">
+                        {/* Folder Category Row */}
+                        <div
+                          onClick={() => toggleFolder(groupName)}
+                          className="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-[#161820] cursor-pointer select-none transition-colors"
+                        >
+                          {isCollapsed ? (
+                            <ChevronRight className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                          ) : (
+                            <ChevronDown className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                          )}
+                          <Folder className="w-4 h-4 text-zinc-400 shrink-0" />
+                          <span className="truncate text-xs font-medium text-zinc-300">{groupName}</span>
+                          <span className="text-[11px] text-zinc-600 font-mono ml-auto">{items.length}</span>
                         </div>
 
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                            isRunning ? 'bg-emerald-500' : 'bg-zinc-600'
-                          }`}
-                        />
-                      </div>
+                        {/* Child Instance items */}
+                        {!isCollapsed && (
+                          <div className="pl-4 pr-1 space-y-0.5">
+                            {items.map((inst) => {
+                              const isSelected = inst.id === activeInstanceId && activeViewTab === 'workspace';
+                              const isRunning = inst.status === 'running';
 
-                      {/* Bottom row: Port & Tokens consumed */}
-                      <div className="flex items-center justify-between text-[10px] font-mono text-[#6B7280] pl-7">
-                        <span className="truncate max-w-[100px]">
-                          Port :{inst.port}
-                        </span>
-                        <span>
-                          {formatCompactNumber(inst.tokensConsumedSession)} tokens
-                        </span>
+                              return (
+                                <div
+                                  key={inst.id}
+                                  onClick={() => {
+                                    setActiveInstanceId(inst.id);
+                                    setActiveViewTab('workspace');
+                                  }}
+                                  className={`group flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all cursor-pointer select-none ${
+                                    isSelected
+                                      ? 'bg-[#22252E] text-zinc-100 font-medium shadow-sm'
+                                      : 'text-zinc-400 hover:bg-[#161820] hover:text-zinc-200'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                    {isRunning ? (
+                                      <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 shadow-[0_0_8px_rgba(52,211,153,0.7)]" />
+                                    ) : (
+                                      <span className="w-2 h-2 rounded-full bg-zinc-600 shrink-0" />
+                                    )}
+                                    <span className="truncate text-sm text-zinc-200 group-hover:text-zinc-100">
+                                      {inst.name}
+                                    </span>
+                                  </div>
+
+                                  <span className="text-xs font-mono text-zinc-500 group-hover:text-zinc-400 shrink-0 ml-2">
+                                    {formatInstanceDurationBadge(inst)}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Bottom Sidebar: Fleet Active Sessions & User Profile */}
-          <div className="p-3 border-t border-[#1F2126] bg-[#111214] space-y-2.5">
-            <div>
-              <div className="flex justify-between text-[10px] font-mono text-[#7D818C] mb-1">
-                <span>Active Instances</span>
-                <span className="text-zinc-200">{runningCount} / {activeAccount.maxConcurrentSessions} active</span>
+          <div className="p-3.5 border-t border-[#1C1E26] bg-[#0E0F12] space-y-3">
+            {!sidebarCollapsed && (
+              <div>
+                <div className="flex justify-between text-xs font-mono text-zinc-400 mb-1.5">
+                  <span>Active Instances</span>
+                  <span className="text-zinc-200 font-medium">{runningCount} / {activeAccount.maxConcurrentSessions} active</span>
+                </div>
+                <div className="w-full h-1.5 bg-[#1C1E26] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-blue-600 rounded-full transition-all duration-300"
+                    style={{ width: `${(runningCount / activeAccount.maxConcurrentSessions) * 100}%` }}
+                  />
+                </div>
               </div>
-              <div className="w-full h-1 bg-[#202228] rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-[#1A56DB] rounded-full"
-                  style={{ width: `${(runningCount / activeAccount.maxConcurrentSessions) * 100}%` }}
-                />
-              </div>
-            </div>
+            )}
 
             {/* User Account Strip */}
-            <div className="flex items-center justify-between pt-1 text-xs">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-5 h-5 rounded-full bg-[#1E2026] border border-[#2B2D36] flex items-center justify-center text-[10px] text-zinc-300 font-medium shrink-0">
+            <div className="flex items-center justify-between pt-1 text-sm">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-6 h-6 rounded-full bg-[#1C1E26] border border-[#2B2D38] flex items-center justify-center text-xs text-zinc-300 font-semibold shrink-0">
                   U
                 </div>
-                <div className="min-w-0">
-                  <div className="text-zinc-200 text-[11px] font-medium truncate">
-                    {activeAccount.email}
+                {!sidebarCollapsed && (
+                  <div className="min-w-0">
+                    <div className="text-zinc-200 text-xs font-medium truncate">
+                      {activeAccount.email}
+                    </div>
+                    <div className="text-[11px] text-zinc-500 font-mono">
+                      {activeAccount.tier}
+                    </div>
                   </div>
-                  <div className="text-[10px] text-[#7D818C] font-mono">
-                    {activeAccount.tier}
-                  </div>
-                </div>
+                )}
               </div>
 
-              <button
-                onClick={() => {
-                  setEditingAccount(activeAccount);
-                  setIsAccountModalOpen(true);
-                }}
-                className="p-1 text-[#7D818C] hover:text-zinc-200 rounded cursor-pointer"
-                title="Account Settings"
-              >
-                <Settings className="w-3.5 h-3.5" />
-              </button>
+              {!sidebarCollapsed && (
+                <button
+                  onClick={() => {
+                    setEditingAccount(activeAccount);
+                    setIsAccountModalOpen(true);
+                  }}
+                  className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-[#1C1E26] rounded-md transition cursor-pointer"
+                  title="Account Settings"
+                >
+                  <Settings className="w-4 h-4" />
+                </button>
+              )}
             </div>
           </div>
         </aside>

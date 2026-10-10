@@ -1,10 +1,18 @@
 @import "tailwindcss";
 
 @layer base {
+  html {
+    font-size: 14.5px;
+    letter-spacing: -0.011em;
+  }
+  
   body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    background-color: #121316;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background-color: #0E0F12;
     color: #e5e7eb;
+    user-select: none;
+    -webkit-user-select: none;
+    overflow: hidden;
   }
   
   code, pre, kbd, .font-mono {
@@ -14,8 +22,8 @@
 
 /* Antigravity Custom scrollbars */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -23,11 +31,10 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2b2e36;
-  border-radius: 3px;
+  background: #252830;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3e424e;
+  background: #383c48;
 }
-
