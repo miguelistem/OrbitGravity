@@ -1,72 +1,57 @@
 import React from 'react';
 
 interface OrbitGravityLogoProps {
-  className?: string;
   size?: number;
-  variant?: 'squircle' | 'glyph';
+  showSquircle?: boolean;
+  className?: string;
 }
 
-export const OrbitGravityLogo: React.FC<OrbitGravityLogoProps> = ({
+export function OrbitGravityLogo({
+  size = 24,
+  showSquircle = true,
   className = '',
-  size = 28,
-  variant = 'squircle',
-}) => {
-  // Unique gradient IDs to prevent collisions
-  const gradId = React.useId().replace(/:/g, '');
+}: OrbitGravityLogoProps) {
+  const gradientId = `orbit-grad-${Math.random().toString(36).substring(2, 7)}`;
+  const meshGradId = `orbit-mesh-${Math.random().toString(36).substring(2, 7)}`;
+  const gridPatternId = `orbit-grid-${Math.random().toString(36).substring(2, 7)}`;
 
-  if (variant === 'glyph') {
+  if (!showSquircle) {
     return (
       <svg
         width={size}
         height={size}
-        viewBox="0 0 32 32"
+        viewBox="0 0 100 100"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
-        className={`shrink-0 ${className}`}
+        className={className}
       >
         <defs>
-          <linearGradient
-            id={`og-grad-${gradId}`}
-            x1="4"
-            y1="26"
-            x2="28"
-            y2="6"
-            gradientUnits="userSpaceOnUse"
-          >
+          <linearGradient id={gradientId} x1="15" y1="85" x2="85" y2="25" gradientUnits="userSpaceOnUse">
             <stop offset="0%" stopColor="#2563EB" />
             <stop offset="25%" stopColor="#0EA5E9" />
             <stop offset="50%" stopColor="#10B981" />
             <stop offset="75%" stopColor="#F59E0B" />
             <stop offset="100%" stopColor="#EF4444" />
           </linearGradient>
-          <filter id={`og-glow-${gradId}`} x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="1.5" result="blur" />
-            <feComposite in="SourceGraphic" in2="blur" operator="over" />
-          </filter>
+          <linearGradient id={meshGradId} x1="50" y1="20" x2="50" y2="85" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#EF4444" stopOpacity="0.9" />
+            <stop offset="40%" stopColor="#EAB308" stopOpacity="0.85" />
+            <stop offset="70%" stopColor="#06B6D4" stopOpacity="0.8" />
+            <stop offset="100%" stopColor="#3B82F6" stopOpacity="0.9" />
+          </linearGradient>
         </defs>
 
-        {/* Ambient Glow waveform */}
+        {/* Sculptural Orbital Arch Glyph */}
         <path
-          d="M 5 25 C 9 25, 11 23, 13.5 16 C 15 11, 15.5 7, 16 7 C 16.5 7, 17 11, 18.5 16 C 21 23, 23 25, 27 25"
-          stroke={`url(#og-grad-${gradId})`}
-          strokeWidth="3.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          opacity="0.4"
-          filter={`url(#og-glow-${gradId})`}
+          d="M 22 78 C 24 74, 30 60, 36 44 C 41 31, 44 24, 50 24 C 56 24, 59 31, 64 44 C 70 60, 76 74, 78 78 C 76 81, 71 81, 66 73 C 58 58, 54 48, 50 48 C 46 48, 42 58, 34 73 C 29 81, 24 81, 22 78 Z"
+          fill={`url(#${gradientId})`}
         />
-
-        {/* Primary sculptural orbital waveform */}
+        {/* Soft volumetric overlay for spectral depth */}
         <path
-          d="M 5 25 C 9 25, 11 23, 13.5 16 C 15 11, 15.5 7, 16 7 C 16.5 7, 17 11, 18.5 16 C 21 23, 23 25, 27 25"
-          stroke={`url(#og-grad-${gradId})`}
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+          d="M 22 78 C 24 74, 30 60, 36 44 C 41 31, 44 24, 50 24 C 56 24, 59 31, 64 44 C 70 60, 76 74, 78 78 C 76 81, 71 81, 66 73 C 58 58, 54 48, 50 48 C 46 48, 42 58, 34 73 C 29 81, 24 81, 22 78 Z"
+          fill={`url(#${meshGradId})`}
+          style={{ mixBlendMode: 'screen', opacity: 0.55 }}
         />
-
-        {/* Crest Orbital Apex Specular Bead */}
-        <circle cx="16" cy="7" r="1.5" fill="#FFF" opacity="0.9" />
       </svg>
     );
   }
@@ -75,100 +60,76 @@ export const OrbitGravityLogo: React.FC<OrbitGravityLogoProps> = ({
     <svg
       width={size}
       height={size}
-      viewBox="0 0 48 48"
+      viewBox="0 0 100 100"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className={`shrink-0 ${className}`}
+      className={className}
     >
       <defs>
-        {/* Iridescent spectrum gradient: deep azure -> cyan -> emerald -> amber-gold -> coral red */}
-        <linearGradient
-          id={`og-full-grad-${gradId}`}
-          x1="6"
-          y1="38"
-          x2="42"
-          y2="10"
-          gradientUnits="userSpaceOnUse"
-        >
+        {/* Fine background coordinate grid pattern from snippet */}
+        <pattern id={gridPatternId} width="10" height="10" patternUnits="userSpaceOnUse">
+          <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#26282E" strokeWidth="0.75" />
+        </pattern>
+
+        {/* Iridescent spectrum gradient (Blue -> Cyan -> Green -> Orange -> Coral Red) */}
+        <linearGradient id={gradientId} x1="15" y1="80" x2="85" y2="25" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor="#2563EB" />
-          <stop offset="26%" stopColor="#0EA5E9" />
-          <stop offset="52%" stopColor="#10B981" />
-          <stop offset="78%" stopColor="#F59E0B" />
+          <stop offset="25%" stopColor="#0EA5E9" />
+          <stop offset="48%" stopColor="#10B981" />
+          <stop offset="72%" stopColor="#F59E0B" />
           <stop offset="100%" stopColor="#EF4444" />
         </linearGradient>
 
-        {/* Subtle grid pattern for technical coordinate aesthetic */}
-        <pattern
-          id={`og-grid-${gradId}`}
-          width="8"
-          height="8"
-          patternUnits="userSpaceOnUse"
-        >
-          <path
-            d="M 8 0 L 0 0 0 8"
-            fill="none"
-            stroke="#1d222c"
-            strokeWidth="0.75"
-          />
-        </pattern>
+        <linearGradient id={meshGradId} x1="50" y1="20" x2="50" y2="85" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#EF4444" stopOpacity="0.85" />
+          <stop offset="35%" stopColor="#EAB308" stopOpacity="0.8" />
+          <stop offset="70%" stopColor="#06B6D4" stopOpacity="0.75" />
+          <stop offset="100%" stopColor="#3B82F6" stopOpacity="0.9" />
+        </linearGradient>
 
-        {/* Volumetric sheen filter */}
-        <filter id={`og-sheen-${gradId}`} x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="2.5" result="blur" />
-          <feComposite in="SourceGraphic" in2="blur" operator="over" />
-        </filter>
+        {/* Soft crest ambient glow */}
+        <radialGradient id="crest-glow" cx="50" cy="28" r="28" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#F97316" stopOpacity="0.25" />
+          <stop offset="100%" stopColor="#F97316" stopOpacity="0" />
+        </radialGradient>
       </defs>
 
-      {/* Matte charcoal squircle container (#121316) */}
+      {/* Dark squircle container matching left example in snippet */}
       <rect
-        x="1.5"
-        y="1.5"
-        width="45"
-        height="45"
-        rx="12"
+        x="2"
+        y="2"
+        width="96"
+        height="96"
+        rx="26"
         fill="#121316"
-        stroke="#272d3b"
-        strokeWidth="1.2"
+        stroke="#272930"
+        strokeWidth="1.5"
       />
 
-      {/* Technical coordinate grid overlay */}
-      <rect
-        x="3"
-        y="3"
-        width="42"
-        height="42"
-        rx="10"
-        fill={`url(#og-grid-${gradId})`}
-        opacity="0.85"
-      />
+      {/* Subtle coordinate grid clip inside squircle */}
+      <g clipPath="url(#squircle-clip)">
+        <rect x="2" y="2" width="96" height="96" rx="26" fill={`url(#${gridPatternId})`} opacity="0.8" />
+      </g>
 
-      {/* Center axis guide lines */}
-      <line x1="24" y1="8" x2="24" y2="40" stroke="#222834" strokeWidth="1" strokeDasharray="2 2" />
-      <line x1="8" y1="34" x2="40" y2="34" stroke="#222834" strokeWidth="1" />
+      <clipPath id="squircle-clip">
+        <rect x="2" y="2" width="96" height="96" rx="26" />
+      </clipPath>
 
-      {/* Ambient glowing waveform */}
+      {/* Ambient glow behind crest */}
+      <circle cx="50" cy="30" r="25" fill="url(#crest-glow)" />
+
+      {/* Smooth sculptural orbital arch curve (Gaussian wave / trajectory arch) */}
       <path
-        d="M 8 34 C 14 34, 17 31, 20.5 21 C 22.5 15, 23.4 11, 24 11 C 24.6 11, 25.5 15, 27.5 21 C 31 31, 34 34, 40 34"
-        stroke={`url(#og-full-grad-${gradId})`}
-        strokeWidth="5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        opacity="0.35"
-        filter={`url(#og-sheen-${gradId})`}
+        d="M 23 76 C 25 72, 31 58, 36 43 C 41 30, 44 24, 50 24 C 56 24, 59 30, 64 43 C 69 58, 75 72, 77 76 C 75 79, 70 79, 65 71 C 58 57, 54 47, 50 47 C 46 47, 42 57, 35 71 C 30 79, 25 79, 23 76 Z"
+        fill={`url(#${gradientId})`}
       />
 
-      {/* Sculptural orbital gravity trajectory arch (Gaussian curve) */}
+      {/* Sheen & volumetric blend overlay */}
       <path
-        d="M 8 34 C 14 34, 17 31, 20.5 21 C 22.5 15, 23.4 11, 24 11 C 24.6 11, 25.5 15, 27.5 21 C 31 31, 34 34, 40 34"
-        stroke={`url(#og-full-grad-${gradId})`}
-        strokeWidth="3.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        d="M 23 76 C 25 72, 31 58, 36 43 C 41 30, 44 24, 50 24 C 56 24, 59 30, 64 43 C 69 58, 75 72, 77 76 C 75 79, 70 79, 65 71 C 58 57, 54 47, 50 47 C 46 47, 42 57, 35 71 C 30 79, 25 79, 23 76 Z"
+        fill={`url(#${meshGradId})`}
+        style={{ mixBlendMode: 'screen', opacity: 0.55 }}
       />
-
-      {/* Crest specular volumetric highlight */}
-      <circle cx="24" cy="11" r="2.2" fill="#FFFFFF" opacity="0.95" />
-      <circle cx="24" cy="11" r="4" fill="#EF4444" opacity="0.25" />
     </svg>
   );
-};
+}

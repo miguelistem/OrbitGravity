@@ -1,0 +1,7 @@
+{
+  "name": "Antigravity IDE Fleet Manager & Desktop Launcher",
+  "description": "Multi-instance orchestrator for Antigravity IDEs with desktop shortcuts generator, account quota monitoring, live session timers, and real-time execution logs.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
