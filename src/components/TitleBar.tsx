@@ -1,35 +1,27 @@
 import React from 'react';
 import { Minus, Square, X } from 'lucide-react';
+import { OrbitGravityLogo } from './OrbitGravityLogo';
 
 interface TitleBarProps {
   activeTitle?: string;
 }
 
 export const TitleBar: React.FC<TitleBarProps> = ({
-  activeTitle = 'Redesign my projects.html',
+  activeTitle = 'OrbitGravity - Portfolio Project Ideas For Attention',
 }) => {
   return (
-    <header className="h-8 bg-[#070a0f] border-b border-[#1e293b] flex items-center justify-between px-3 text-xs text-[#94a3b8] shrink-0 select-none z-30">
+    <header className="h-8 bg-[#070a0f] border-b border-[#182030] flex items-center justify-between px-3 text-xs text-[#94a3b8] shrink-0 select-none z-30">
       {/* Left: Brand & Menu items */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         <div className="flex items-center gap-1.5 font-semibold text-[#f8fafc]">
-          {/* Antigravity Triangular Prism Glyph */}
-          <svg
-            className="w-3.5 h-3.5 text-blue-400 shrink-0"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-          >
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-          </svg>
-          <span className="tracking-tight text-slate-100">Antigravity</span>
+          {/* OrbitGravity Minimalist Glyph */}
+          <OrbitGravityLogo variant="glyph" size={16} />
+          <span className="tracking-tight text-slate-100 font-bold text-xs">OrbitGravity</span>
         </div>
 
-        <nav className="flex items-center gap-3 text-[#64748b] text-[11px]">
+        <nav className="flex items-center gap-3 text-[#64748b] text-[11px] ml-1">
           <button className="hover:text-slate-200 transition-colors cursor-pointer bg-transparent border-0 p-0">
             File
-          </button>
-          <button className="hover:text-slate-200 transition-colors cursor-pointer bg-transparent border-0 p-0">
-            Edit
           </button>
           <button className="hover:text-slate-200 transition-colors cursor-pointer bg-transparent border-0 p-0">
             View
@@ -43,7 +35,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
         </nav>
       </div>
 
-      {/* Center: Active Document / Window Title */}
+      {/* Center: Window Title matching screenshot */}
       <div className="text-[#64748b] text-[11px] font-mono tracking-tight hidden sm:block truncate max-w-xs md:max-w-md">
         {activeTitle}
       </div>

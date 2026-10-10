@@ -32,10 +32,14 @@ export interface InstanceItem {
   status: InstanceStatus;
   tagColor?: string;
   dotColor?: string;
-  iconType?: 'code' | 'window' | 'table' | 'sparkle' | 'brackets';
+  iconType?: 'code' | 'window' | 'table' | 'sparkle' | 'brackets' | 'terminal';
   iconBg?: string;
   workspacePath?: string;
   profileMode?: 'auth-only' | 'full';
+  shortcutKey?: string;
+  breadcrumbPath?: string;
+  model?: string;
+  duration?: string;
 }
 
 export interface EngineHealth {
@@ -51,6 +55,7 @@ export interface CreateInstanceInput {
   accountId: string;
   mode: 'auth-only' | 'full';
   workspacePath?: string;
+  model?: string;
 }
 
 export interface CreateAccountInput {
@@ -65,7 +70,9 @@ export interface CreateAccountInput {
 
 export interface ToastNotification {
   id: string;
-  type: 'info' | 'success' | 'warning' | 'error';
+  type: 'success' | 'info' | 'warning' | 'error';
   title: string;
   message: string;
 }
+
+export type NavTab = 'shortcuts' | 'quotas' | 'workspace';
