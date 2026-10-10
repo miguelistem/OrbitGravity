@@ -258,75 +258,109 @@ export default function App() {
     return `:${inst.port}`;
   };
 
-  const handleMinimizeWindow = async () => {
+  const handleMinimizeWindow = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     try {
-      const { getCurrentWindow } = await import('@tauri-apps/api/window');
-      await getCurrentWindow().minimize();
-    } catch {}
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('window_minimize');
+    } catch {
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        await getCurrentWindow().minimize();
+      } catch {}
+    }
   };
 
-  const handleMaximizeWindow = async () => {
+  const handleMaximizeWindow = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     try {
-      const { getCurrentWindow } = await import('@tauri-apps/api/window');
-      await getCurrentWindow().toggleMaximize();
-    } catch {}
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('window_toggle_maximize');
+    } catch {
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        await getCurrentWindow().toggleMaximize();
+      } catch {}
+    }
   };
 
-  const handleCloseWindow = async () => {
+  const handleCloseWindow = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     try {
-      const { getCurrentWindow } = await import('@tauri-apps/api/window');
-      await getCurrentWindow().close();
-    } catch {}
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('window_close');
+    } catch {
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        await getCurrentWindow().close();
+      } catch {}
+    }
+  };
+
+  const handleStartDrag = async (e: React.MouseEvent) => {
+    if (e.button === 0 && !(e.target as HTMLElement).closest('button, a, input, select')) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('window_start_drag');
+      } catch {
+        try {
+          const { getCurrentWindow } = await import('@tauri-apps/api/window');
+          await getCurrentWindow().startDragging();
+        } catch {}
+      }
+    }
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#0E0F12] text-[#D8DADF] font-sans select-none antialiased">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#111215] text-[#EDEDED] font-sans select-none antialiased">
       {/* 1. OS Titlebar (Seamlessly integrated with window) */}
       <div
         data-tauri-drag-region
-        className="h-9 bg-[#111215] border-b border-[#1E2026] flex items-center justify-between px-3 shrink-0 text-xs text-[#8E92A0] select-none"
+        onMouseDown={handleStartDrag}
+        className="h-10 bg-[#16171B] border-b border-[#23242A] flex items-center justify-between pl-3.5 pr-0 shrink-0 text-xs text-[#9DA1B0] select-none cursor-default"
       >
         {/* Left Window Menu with OrbitGravity Logo Glyph & Menu Items */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3.5 pointer-events-auto">
           <div className="flex items-center gap-2">
-            <OrbitGravityLogo size={16} showSquircle={false} />
-            <span className="font-semibold text-sm text-zinc-100 tracking-tight">OrbitGravity</span>
+            <OrbitGravityLogo size={17} showSquircle={false} />
+            <span className="font-semibold text-[13.5px] text-[#EDEDED] tracking-tight">OrbitGravity</span>
           </div>
-          <div className="flex items-center gap-2 text-xs text-zinc-400">
-            <span className="hover:text-zinc-200 cursor-pointer px-1.5 py-0.5 rounded hover:bg-zinc-800/50 transition">File</span>
-            <span className="hover:text-zinc-200 cursor-pointer px-1.5 py-0.5 rounded hover:bg-zinc-800/50 transition">View</span>
-            <span className="hover:text-zinc-200 cursor-pointer px-1.5 py-0.5 rounded hover:bg-zinc-800/50 transition">Window</span>
-            <span className="hover:text-zinc-200 cursor-pointer px-1.5 py-0.5 rounded hover:bg-zinc-800/50 transition">Help</span>
+          <div className="flex items-center gap-3 text-[13px] text-[#A6ABB8]">
+            <span className="hover:text-white cursor-pointer px-1.5 py-0.5 rounded hover:bg-zinc-800/50 transition">File</span>
+            <span className="hover:text-white cursor-pointer px-1.5 py-0.5 rounded hover:bg-zinc-800/50 transition">View</span>
+            <span className="hover:text-white cursor-pointer px-1.5 py-0.5 rounded hover:bg-zinc-800/50 transition">Window</span>
+            <span className="hover:text-white cursor-pointer px-1.5 py-0.5 rounded hover:bg-zinc-800/50 transition">Help</span>
           </div>
         </div>
 
         {/* Center Session Title */}
         <div
           data-tauri-drag-region
-          className="text-xs font-mono text-zinc-500 truncate max-w-sm hidden sm:block pointer-events-none"
+          onMouseDown={handleStartDrag}
+          className="text-[12px] font-mono text-[#7D8290] truncate max-w-sm hidden md:block pointer-events-none"
         >
           {activeInstance?.name ? activeInstance.name : 'OrbitGravity Fleet'}
         </div>
 
-        {/* Right Windows Control Buttons */}
-        <div className="flex items-center gap-0.5 text-xs pr-0.5">
+        {/* Right Windows Control Buttons - Standard Windows 11 size */}
+        <div className="flex items-center h-full text-xs">
           <button
             onClick={handleMinimizeWindow}
-            className="hover:text-zinc-200 hover:bg-zinc-800/80 w-8 h-7 flex items-center justify-center rounded cursor-pointer transition-colors"
+            className="hover:text-white hover:bg-[#252730] w-11 h-10 flex items-center justify-center text-[#B0B4C0] cursor-pointer transition-colors"
             title="Minimize"
           >
             —
           </button>
           <button
             onClick={handleMaximizeWindow}
-            className="hover:text-zinc-200 hover:bg-zinc-800/80 w-8 h-7 flex items-center justify-center rounded cursor-pointer transition-colors"
+            className="hover:text-white hover:bg-[#252730] w-11 h-10 flex items-center justify-center text-[#B0B4C0] cursor-pointer transition-colors"
             title="Maximize"
           >
             🗖
           </button>
           <button
             onClick={handleCloseWindow}
-            className="hover:text-red-300 hover:bg-red-900/80 w-8 h-7 flex items-center justify-center rounded cursor-pointer transition-colors"
+            className="hover:text-white hover:bg-[#E81123] w-11 h-10 flex items-center justify-center text-[#B0B4C0] cursor-pointer transition-colors"
             title="Close"
           >
             ✕
@@ -337,7 +371,7 @@ export default function App() {
       {/* 2. Main Body Container with Left Sidebar & Center Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* LEFT SIDEBAR - Desktop Shortcuts & Instances Hub */}
-        <aside className={`${sidebarCollapsed ? 'w-16' : 'w-72 lg:w-[295px]'} bg-[#101114] border-r border-[#1E2026] flex flex-col justify-between shrink-0 select-none transition-all duration-200`}>
+        <aside className={`${sidebarCollapsed ? 'w-16' : 'w-[320px] min-w-[320px]'} bg-[#141518] border-r border-[#22242B] flex flex-col justify-between shrink-0 select-none transition-all duration-200`}>
           <div className="flex-1 overflow-y-auto p-3.5 space-y-4">
             {/* Top Bar with OrbitGravity Squircle Logo & Controls (NO duplicate app name) */}
             <div className="flex items-center justify-between pb-0.5 px-0.5">
@@ -346,7 +380,7 @@ export default function App() {
                 {!sidebarCollapsed && (
                   <button
                     onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                    className="p-1 text-zinc-400 hover:text-zinc-200 hover:bg-[#1C1E26] rounded cursor-pointer transition"
+                    className="p-1.5 text-zinc-400 hover:text-white hover:bg-[#202229] rounded-md cursor-pointer transition"
                     title="Toggle Sidebar"
                   >
                     <PanelLeft className="w-4 h-4" />
@@ -356,8 +390,8 @@ export default function App() {
 
               {!sidebarCollapsed && (
                 <div className="flex items-center gap-1 text-zinc-400">
-                  <button className="p-1 hover:text-zinc-200 hover:bg-[#1C1E26] rounded text-xs cursor-pointer transition">&lt;</button>
-                  <button className="p-1 hover:text-zinc-200 hover:bg-[#1C1E26] rounded text-xs cursor-pointer transition">&gt;</button>
+                  <button className="p-1.5 hover:text-white hover:bg-[#202229] rounded-md text-xs cursor-pointer transition">&lt;</button>
+                  <button className="p-1.5 hover:text-white hover:bg-[#202229] rounded-md text-xs cursor-pointer transition">&gt;</button>
                 </div>
               )}
             </div>
@@ -369,9 +403,9 @@ export default function App() {
                   setEditingInstance(null);
                   setIsInstanceModalOpen(true);
                 }}
-                className="w-full py-2.5 px-3.5 bg-[#171920] hover:bg-[#1F222B] text-zinc-200 rounded-lg border border-[#272A34] text-sm font-medium transition cursor-pointer flex items-center gap-2.5 shadow-sm"
+                className="w-full h-10 px-3.5 bg-[#1F2128] hover:bg-[#282B34] text-[#EDEDED] rounded-lg border border-[#2D303B] text-[13.5px] font-medium transition cursor-pointer flex items-center gap-2.5 shadow-sm"
               >
-                <Plus className="w-4 h-4 text-zinc-300" />
+                <Plus className="w-4 h-4 text-[#C4C7D2]" />
                 <span>New Instance Shortcut</span>
               </button>
             ) : (
@@ -380,76 +414,76 @@ export default function App() {
                   setEditingInstance(null);
                   setIsInstanceModalOpen(true);
                 }}
-                className="w-full py-2 flex items-center justify-center bg-[#171920] hover:bg-[#1F222B] text-zinc-200 rounded-lg border border-[#272A34] transition cursor-pointer"
+                className="w-full h-10 flex items-center justify-center bg-[#1F2128] hover:bg-[#282B34] text-[#EDEDED] rounded-lg border border-[#2D303B] transition cursor-pointer"
                 title="New Instance Shortcut"
               >
-                <Plus className="w-4 h-4 text-zinc-300" />
+                <Plus className="w-4 h-4 text-[#C4C7D2]" />
               </button>
             )}
 
             {/* Global Navigation Links */}
-            <div className="space-y-1 text-sm text-[#9498A5]">
+            <div className="space-y-1 text-[13.5px] text-[#C4C7D0]">
               <button
                 onClick={() => setActiveViewTab('workspace')}
-                className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-2.5 transition cursor-pointer ${
+                className={`w-full text-left h-9 px-3 rounded-lg flex items-center gap-2.5 transition cursor-pointer ${
                   activeViewTab === 'workspace'
-                    ? 'bg-[#1E212A] text-zinc-100 font-medium'
-                    : 'hover:bg-[#161820] hover:text-zinc-200'
+                    ? 'bg-[#262832] text-white font-medium'
+                    : 'hover:bg-[#1E2028] hover:text-white'
                 }`}
                 title="Session Workspace"
               >
-                <History className="w-4 h-4 text-[#8E92A0] shrink-0" />
+                <History className="w-[18px] h-[18px] text-[#9A9EA8] shrink-0" />
                 {!sidebarCollapsed && <span>Session Workspace</span>}
               </button>
 
               <button
                 onClick={() => setActiveViewTab('shortcuts')}
-                className={`w-full text-left px-3 py-2 rounded-lg flex items-center justify-between transition cursor-pointer ${
+                className={`w-full text-left h-9 px-3 rounded-lg flex items-center justify-between transition cursor-pointer ${
                   activeViewTab === 'shortcuts'
-                    ? 'bg-[#1E212A] text-zinc-100 font-medium'
-                    : 'hover:bg-[#161820] hover:text-zinc-200'
+                    ? 'bg-[#262832] text-white font-medium'
+                    : 'hover:bg-[#1E2028] hover:text-white'
                 }`}
                 title="Desktop Shortcuts Hub"
               >
                 <div className="flex items-center gap-2.5">
-                  <Monitor className="w-4 h-4 text-[#8E92A0] shrink-0" />
+                  <Monitor className="w-[18px] h-[18px] text-[#9A9EA8] shrink-0" />
                   {!sidebarCollapsed && <span>Desktop Shortcuts Hub</span>}
                 </div>
                 {!sidebarCollapsed && (
-                  <span className="text-xs font-mono text-[#6E7382] px-1.5 py-0.2 rounded bg-[#161820]">{instances.length}</span>
+                  <span className="text-xs font-mono text-[#8B8F9A] px-1.5 py-0.2 rounded bg-[#1C1E25]">{instances.length}</span>
                 )}
               </button>
 
               <button
                 onClick={() => setActiveViewTab('accounts')}
-                className={`w-full text-left px-3 py-2 rounded-lg flex items-center justify-between transition cursor-pointer ${
+                className={`w-full text-left h-9 px-3 rounded-lg flex items-center justify-between transition cursor-pointer ${
                   activeViewTab === 'accounts'
-                    ? 'bg-[#1E212A] text-zinc-100 font-medium'
-                    : 'hover:bg-[#161820] hover:text-zinc-200'
+                    ? 'bg-[#262832] text-white font-medium'
+                    : 'hover:bg-[#1E2028] hover:text-white'
                 }`}
                 title="Account Quotas"
               >
                 <div className="flex items-center gap-2.5">
-                  <ShieldCheck className="w-4 h-4 text-[#8E92A0] shrink-0" />
+                  <ShieldCheck className="w-[18px] h-[18px] text-[#9A9EA8] shrink-0" />
                   {!sidebarCollapsed && <span>Account Quotas</span>}
                 </div>
                 {!sidebarCollapsed && (
-                  <span className="text-xs text-zinc-400 font-mono">68%</span>
+                  <span className="text-xs text-zinc-300 font-mono">68%</span>
                 )}
               </button>
             </div>
 
             {/* PROJECTS / INSTANCES SECTION - Clean Antigravity Style */}
             {!sidebarCollapsed && (
-              <div className="pt-2 border-t border-[#1C1E26]">
-                <div className="flex items-center justify-between text-xs text-zinc-400 px-2 py-1.5">
-                  <span className="font-semibold text-xs tracking-wider uppercase text-zinc-400">
+              <div className="pt-2 border-t border-[#202229]">
+                <div className="flex items-center justify-between text-[12px] text-[#8B8F9A] px-2 py-1.5">
+                  <span className="font-semibold tracking-wider uppercase text-[#8B8F9A]">
                     Projects
                   </span>
-                  <div className="flex items-center gap-1.5 text-zinc-400">
+                  <div className="flex items-center gap-1.5 text-[#8B8F9A]">
                     <button
                       onClick={() => setSidebarFilter(sidebarFilter === 'all' ? 'running' : 'all')}
-                      className={`p-1 rounded hover:text-zinc-200 transition ${
+                      className={`p-1 rounded hover:text-white transition ${
                         sidebarFilter === 'running' ? 'text-blue-400 bg-blue-500/10' : ''
                       }`}
                       title={sidebarFilter === 'running' ? 'Showing running only' : 'Filter running instances'}
@@ -461,7 +495,7 @@ export default function App() {
                         setEditingInstance(null);
                         setIsInstanceModalOpen(true);
                       }}
-                      className="p-1 rounded hover:text-zinc-200 transition"
+                      className="p-1 rounded hover:text-white transition"
                       title="New Instance Shortcut"
                     >
                       <FolderPlus className="w-3.5 h-3.5" />
@@ -470,7 +504,7 @@ export default function App() {
                 </div>
 
                 {/* Clean Hierarchical Vertical Nav (NO BOXES, NO HARD BORDERS) */}
-                <div className="space-y-2 mt-1">
+                <div className="space-y-1 mt-1">
                   {Object.entries(groupedInstances).map(([groupName, items]) => {
                     const isCollapsed = !!collapsedFolders[groupName];
                     return (
@@ -478,16 +512,16 @@ export default function App() {
                         {/* Folder Category Row */}
                         <div
                           onClick={() => toggleFolder(groupName)}
-                          className="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-[#161820] cursor-pointer select-none transition-colors"
+                          className="flex items-center gap-2 px-2 py-1.5 rounded-md text-[13px] font-medium text-[#9A9EA8] hover:text-[#EDEDED] hover:bg-[#181A22] cursor-pointer select-none transition-colors"
                         >
                           {isCollapsed ? (
-                            <ChevronRight className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                            <ChevronRight className="w-3.5 h-3.5 text-[#707482] shrink-0" />
                           ) : (
-                            <ChevronDown className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                            <ChevronDown className="w-3.5 h-3.5 text-[#707482] shrink-0" />
                           )}
-                          <Folder className="w-4 h-4 text-zinc-400 shrink-0" />
-                          <span className="truncate text-xs font-medium text-zinc-300">{groupName}</span>
-                          <span className="text-[11px] text-zinc-600 font-mono ml-auto">{items.length}</span>
+                          <Folder className="w-4 h-4 text-[#8B8F9A] shrink-0" />
+                          <span className="truncate text-[13px] font-medium text-[#A6ABB8]">{groupName}</span>
+                          <span className="text-[11px] text-[#636775] font-mono ml-auto">{items.length}</span>
                         </div>
 
                         {/* Child Instance items */}
@@ -504,24 +538,24 @@ export default function App() {
                                     setActiveInstanceId(inst.id);
                                     setActiveViewTab('workspace');
                                   }}
-                                  className={`group flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all cursor-pointer select-none ${
+                                  className={`group flex items-center justify-between px-3 py-2 rounded-lg text-[13.5px] transition-all cursor-pointer select-none ${
                                     isSelected
-                                      ? 'bg-[#22252E] text-zinc-100 font-medium shadow-sm'
-                                      : 'text-zinc-400 hover:bg-[#161820] hover:text-zinc-200'
+                                      ? 'bg-[#282A34] text-white font-medium shadow-sm'
+                                      : 'text-[#C4C7D0] hover:bg-[#1B1D25] hover:text-white'
                                   }`}
                                 >
                                   <div className="flex items-center gap-2.5 min-w-0 flex-1">
                                     {isRunning ? (
-                                      <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 shadow-[0_0_8px_rgba(52,211,153,0.7)]" />
+                                      <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
                                     ) : (
                                       <span className="w-2 h-2 rounded-full bg-zinc-600 shrink-0" />
                                     )}
-                                    <span className="truncate text-sm text-zinc-200 group-hover:text-zinc-100">
+                                    <span className="truncate text-[13.5px] text-[#EDEDED] group-hover:text-white">
                                       {inst.name}
                                     </span>
                                   </div>
 
-                                  <span className="text-xs font-mono text-zinc-500 group-hover:text-zinc-400 shrink-0 ml-2">
+                                  <span className="text-[12px] font-mono text-[#787D8A] group-hover:text-[#A6ABB8] shrink-0 ml-2">
                                     {formatInstanceDurationBadge(inst)}
                                   </span>
                                 </div>
