@@ -18,7 +18,8 @@ interface DesktopShortcutsViewProps {
   instances: InstanceItem[];
   onOpenNewInstance: () => void;
   onLaunchInstance: (id: string, e: React.MouseEvent) => void;
-  onDownloadAllShortcuts: () => void;
+  onDownloadAllShortcuts: (targetKey: string) => void;
+  onDownloadInstanceShortcut: (inst: InstanceItem, targetKey: string) => void;
   onCopyShortcutCommand: (inst: InstanceItem) => void;
   onExportTarget: (targetKey: string) => void;
 }
@@ -28,16 +29,24 @@ export const DesktopShortcutsView: React.FC<DesktopShortcutsViewProps> = ({
   onOpenNewInstance,
   onLaunchInstance,
   onDownloadAllShortcuts,
+  onDownloadInstanceShortcut,
   onCopyShortcutCommand,
   onExportTarget,
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [downloadedId, setDownloadedId] = useState<string | null>(null);
   const [selectedTarget, setSelectedTarget] = useState<string>('windows-batch');
 
   const handleCopy = (inst: InstanceItem) => {
     onCopyShortcutCommand(inst);
     setCopiedId(inst.id);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleDownload = (inst: InstanceItem) => {
+    onDownloadInstanceShortcut(inst, selectedTarget);
+    setDownloadedId(inst.id);
+    setTimeout(() => setDownloadedId(null), 2000);
   };
 
   const exportTargets = [
@@ -86,11 +95,21 @@ export const DesktopShortcutsView: React.FC<DesktopShortcutsViewProps> = ({
         {/* Header Action Buttons */}
         <div className="flex items-center gap-2.5">
           <button
-            onClick={onDownloadAllShortcuts}
+            onClick={() => onDownloadAllShortcuts(selectedTarget)}
             className="py-1.5 px-3 bg-[#121722] hover:bg-[#182030] border border-[#222e42] hover:border-slate-600 text-slate-300 hover:text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition cursor-pointer shadow-sm"
           >
             <Download className="w-3.5 h-3.5 text-slate-400" />
-            <span>Download All (.desktop)</span>
+            <span>
+              Download All (
+              {selectedTarget === 'windows-batch'
+                ? '.bat'
+                : selectedTarget === 'linux-desktop'
+                ? '.desktop'
+                : selectedTarget === 'macos-shell'
+                ? '.sh'
+                : '.url'}
+              )
+            </span>
           </button>
 
           <button
@@ -227,11 +246,23 @@ export const DesktopShortcutsView: React.FC<DesktopShortcutsViewProps> = ({
 
                   {/* Action 2: Download Launcher */}
                   <button
-                    onClick={() => onExportTarget(selectedTarget)}
+                    onClick={() => handleDownload(inst)}
                     className="p-1.5 rounded-md hover:bg-[#1a2436] text-[#64748b] hover:text-slate-200 transition cursor-pointer"
-                    title="Download launcher file"
+                    title={`Download ${
+                      selectedTarget === 'windows-batch'
+                        ? '.bat'
+                        : selectedTarget === 'linux-desktop'
+                        ? '.desktop'
+                        : selectedTarget === 'macos-shell'
+                        ? '.sh'
+                        : '.url'
+                    } launcher`}
                   >
-                    <Download className="w-3.5 h-3.5" />
+                    {downloadedId === inst.id ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    ) : (
+                      <Download className="w-3.5 h-3.5" />
+                    )}
                   </button>
 
                   {/* Action 3: Settings */}

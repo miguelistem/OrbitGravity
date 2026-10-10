@@ -16,6 +16,7 @@ import { MainDashboard } from './components/MainDashboard';
 import { NewInstanceModal } from './components/NewInstanceModal';
 import { NewAccountModal } from './components/NewAccountModal';
 import { ToastContainer } from './components/ToastContainer';
+import { generateShortcutFile, triggerFileDownload } from './utils/shortcutGenerator';
 
 export function App() {
   const [accounts, setAccounts] = useState<AccountProfile[]>(() => loadMockAccounts());
@@ -68,6 +69,32 @@ export function App() {
     return () => {
       isMounted = false;
     };
+  }, []);
+
+  // Dynamic real-time duration tick timer for running instances
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setInstances((prev) =>
+        prev.map((inst) => {
+          if (inst.status !== 'running') return inst;
+          const parts = (inst.duration || '00:00:00').split(':').map(Number);
+          const totalSec =
+            (parts[0] || 0) * 3600 +
+            (parts[1] || 0) * 60 +
+            (parts[2] || 0) +
+            1;
+          const h = Math.floor(totalSec / 3600);
+          const m = Math.floor((totalSec % 3600) / 60);
+          const s = totalSec % 60;
+          const duration = `${h.toString().padStart(2, '0')}:${m
+            .toString()
+            .padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+          return { ...inst, duration };
+        })
+      );
+    }, 1000);
+
+    return () => clearInterval(timer);
   }, []);
 
   const addToast = (
@@ -180,12 +207,29 @@ export function App() {
     }
   };
 
+  // Download single instance launcher file
+  const handleDownloadInstanceShortcut = (inst: InstanceItem, targetKey: string) => {
+    const file = generateShortcutFile(inst, targetKey);
+    triggerFileDownload(file.filename, file.content, file.mimeType);
+    addToast(
+      'success',
+      'Launcher Downloaded',
+      `Saved "${file.filename}" for ${inst.name}.`
+    );
+  };
+
   // Download All Shortcuts
-  const handleDownloadAllShortcuts = () => {
+  const handleDownloadAllShortcuts = (targetKey: string) => {
+    instances.forEach((inst, index) => {
+      setTimeout(() => {
+        const file = generateShortcutFile(inst, targetKey);
+        triggerFileDownload(file.filename, file.content, file.mimeType);
+      }, index * 120);
+    });
     addToast(
       'success',
       'Exporting All Launchers',
-      `Generated ${instances.length} desktop entry files (.desktop & .bat).`
+      `Exporting ${instances.length} ${targetKey} shortcut files.`
     );
   };
 
@@ -201,8 +245,8 @@ export function App() {
         : 'Web Protocol (.url)';
     addToast(
       'info',
-      'Target Selected',
-      `Ready to export in ${formatName} format.`
+      'Export Format Active',
+      `Launchers will generate as ${formatName}.`
     );
   };
 
@@ -244,6 +288,7 @@ export function App() {
             onOpenNewInstance={() => setIsNewInstanceModalOpen(true)}
             onLaunchInstance={handleToggleInstance}
             onDownloadAllShortcuts={handleDownloadAllShortcuts}
+            onDownloadInstanceShortcut={handleDownloadInstanceShortcut}
             onCopyShortcutCommand={handleCopyShortcutCommand}
             onExportTarget={handleExportTarget}
           />
