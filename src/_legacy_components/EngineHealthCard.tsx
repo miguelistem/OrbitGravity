@@ -27,7 +27,7 @@ export const EngineHealthCard: React.FC<EngineHealthCardProps> = ({ health }) =>
           </div>
           <div
             className="text-slate-200 font-mono text-[11px] mt-1 truncate"
-            title="C:\Users\Miguel\AppData\Local\Programs\antigravity\Antigravity.exe"
+            title="%LOCALAPPDATA%\Programs\antigravity\Antigravity.exe"
           >
             {health.detectedBinary}
           </div>

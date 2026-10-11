@@ -14,7 +14,7 @@ export function generateShortcutFile(
   targetKey: string
 ): ShortcutFile {
   const safeName = inst.name.replace(/[^a-zA-Z0-9_-]/g, '_');
-  const profileDir = `C:\\Users\\Miguel\\AntigravityProfiles\\${safeName}`;
+  const profileDir = `%USERPROFILE%\\AntigravityProfiles\\${safeName}`;
   const workspace = inst.workspacePath || 'e:\\Projects\\Workspace';
 
   switch (targetKey) {
@@ -47,7 +47,7 @@ echo [OrbitGravity] Profile  : %PROFILE_ROOT%
 echo [OrbitGravity] Workspace: ${workspace}
 echo ============================================================================
 
-start "" "C:\\Users\\Miguel\\AppData\\Local\\Programs\\antigravity\\Antigravity.exe" ^
+start "" "%LOCALAPPDATA%\\Programs\\antigravity\\antigravity.exe" ^
   --user-data-dir="%USERDATA_DIR%" ^
   --extensions-dir="%EXT_DIR%" ^
   --new-window ^

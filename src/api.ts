@@ -167,7 +167,7 @@ const DEFAULT_INSTANCES: InstanceItem[] = [
 
 const DEFAULT_HEALTH: EngineHealth = {
   detectedBinary: 'Antigravity.exe & IDE.exe',
-  profilesDirectory: 'C:\\Users\\Miguel\\AntigravityProfiles',
+  profilesDirectory: '%USERPROFILE%\\AntigravityProfiles',
   mechanism: 'NTFS Directory Junctions',
   storageSaved: '~1.98 GB (Shared Exts)',
   statusText: 'Junctions: Active • Antigravity 2.0.1 Ready',

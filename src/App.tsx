@@ -255,7 +255,7 @@ export default function App() {
     } else {
       let newId = `inst-${Date.now().toString(36)}`;
       const cleanName = (data.name || 'Instance').replace(/[^a-zA-Z0-9_-]/g, '') || 'Instance';
-      let profileDir = `C:\\Users\\Miguel\\AntigravityProfiles\\${cleanName}`;
+      let profileDir = `%USERPROFILE%\\AntigravityProfiles\\${cleanName}`;
       let resolvedWorkspace = data.workspacePath?.trim() || profileDir;
 
       if (isTauri()) {

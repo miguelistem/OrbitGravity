@@ -63,7 +63,7 @@ export const INITIAL_INSTANCES: AntigravityInstance[] = [
     accountId: 'acc-enterprise',
     appType: 'antigravity_ide',
     workspacePath: 'e:\\Projects\\Portfolio-Ideas',
-    profileDir: 'C:\\Users\\Miguel\\AntigravityProfiles\\PortfolioProjectIdeas',
+    profileDir: '%USERPROFILE%\\AntigravityProfiles\\PortfolioProjectIdeas',
     displayMode: 'desktop-gui',
     envVars: {
       NODE_ENV: 'development',
@@ -85,7 +85,7 @@ export const INITIAL_INSTANCES: AntigravityInstance[] = [
     accountId: 'acc-enterprise',
     appType: 'antigravity_ide',
     workspacePath: 'e:\\Projects\\Rust-Core-Services',
-    profileDir: 'C:\\Users\\Miguel\\AntigravityProfiles\\RustCoreMicroservices',
+    profileDir: '%USERPROFILE%\\AntigravityProfiles\\RustCoreMicroservices',
     displayMode: 'desktop-gui',
     envVars: {
       RUST_LOG: 'info',
@@ -107,7 +107,7 @@ export const INITIAL_INSTANCES: AntigravityInstance[] = [
     accountId: 'acc-pro',
     appType: 'antigravity',
     workspacePath: 'e:\\Projects\\Auth-Gateway',
-    profileDir: 'C:\\Users\\Miguel\\AntigravityProfiles\\AuthGateway',
+    profileDir: '%USERPROFILE%\\AntigravityProfiles\\AuthGateway',
     displayMode: 'desktop-gui',
     envVars: {
       NODE_ENV: 'production',
@@ -129,7 +129,7 @@ export const INITIAL_INSTANCES: AntigravityInstance[] = [
     accountId: 'acc-lab',
     appType: 'antigravity',
     workspacePath: 'e:\\Projects\\PLC-Bridge',
-    profileDir: 'C:\\Users\\Miguel\\AntigravityProfiles\\IndustrialControlBridge',
+    profileDir: '%USERPROFILE%\\AntigravityProfiles\\IndustrialControlBridge',
     displayMode: 'desktop-gui',
     envVars: {
       PLC_HOST: '192.168.1.100',
@@ -151,7 +151,7 @@ export const INITIAL_INSTANCES: AntigravityInstance[] = [
     accountId: 'acc-pro',
     appType: 'antigravity_ide',
     workspacePath: 'e:\\Projects\\Vector-Ingestion',
-    profileDir: 'C:\\Users\\Miguel\\AntigravityProfiles\\StreamingVectorIngestion',
+    profileDir: '%USERPROFILE%\\AntigravityProfiles\\StreamingVectorIngestion',
     displayMode: 'desktop-gui',
     envVars: {
       BATCH_SIZE: '500',
