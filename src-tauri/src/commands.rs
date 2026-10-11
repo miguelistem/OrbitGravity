@@ -456,3 +456,14 @@ pub fn pick_file() -> Result<Option<String>, String> {
     Ok(file.map(|p| p.to_string_lossy().to_string()))
 }
 
+#[tauri::command]
+pub fn open_in_explorer(path: String) -> Result<(), String> {
+    let p = std::path::Path::new(&path);
+    if p.exists() {
+        let _ = std::process::Command::new("explorer.exe")
+            .arg(&path)
+            .spawn();
+    }
+    Ok(())
+}
+

@@ -2,48 +2,24 @@ import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { isTauri } from '../api';
 import { AntigravityInstance, AntigravityAccount, LogEntry } from '../types/antigravity';
-import { formatSecondsToTime, formatCompactNumber, formatCurrency, formatTimeLeft } from '../utils/formatters';
-import { 
-  downloadFile, 
-  generateWindowsBatch, 
-  generateLinuxDesktopEntry, 
-  generateBashScript, 
-  generateUrlShortcut, 
-  generateShellOneLiner 
-} from '../utils/shortcutGenerators';
+import { formatSecondsToTime } from '../utils/formatters';
 import { 
   Play, 
   Pause, 
-  Square, 
   Settings, 
-  Download, 
   Clock, 
   ExternalLink, 
   Code, 
   Terminal, 
-  CheckCircle2, 
-  ChevronRight, 
-  Send, 
-  Sparkles, 
-  Plus, 
-  Mic, 
-  ThumbsUp, 
-  ThumbsDown, 
   Copy, 
   Check, 
   ShieldCheck, 
-  Gauge, 
-  CreditCard, 
-  FileCode, 
-  FileText, 
-  ChevronDown, 
-  ChevronUp,
-  Cpu,
-  Layers,
-  Zap,
-  Monitor,
+  Monitor, 
   Trash2,
-  AlertTriangle
+  Folder,
+  FileCode,
+  Layers,
+  Sparkles
 } from 'lucide-react';
 
 interface AntigravityWorkspaceProps {
@@ -67,78 +43,14 @@ export function AntigravityWorkspace({
   onLaunchIde,
   onDeleteInstance,
 }: AntigravityWorkspaceProps) {
-  const [activeEditorTab, setActiveEditorTab] = useState<'code' | 'logs' | 'telemetry'>('code');
-  const [showTelemetryBar, setShowTelemetryBar] = useState(true);
-  const [promptInput, setPromptInput] = useState('');
-  const [terminalInput, setTerminalInput] = useState('');
-  const [isCopied, setIsCopied] = useState(false);
-  const [copiedCli, setCopiedCli] = useState(false);
-  const [isDiffReviewed, setIsDiffReviewed] = useState(false);
   const [shortcutCreated, setShortcutCreated] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [copiedPath, setCopiedPath] = useState(false);
+  const [copiedLogs, setCopiedLogs] = useState(false);
 
   const isRunning = instance.status === 'running';
-
-  const handleSendPrompt = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!promptInput.trim()) return;
-
-    const query = promptInput.trim();
-    setPromptInput('');
-
-    onAddLog({
-      instanceId: instance.id,
-      level: 'exec',
-      source: 'user',
-      message: query,
-    });
-
-    setTimeout(() => {
-      onAddLog({
-        instanceId: instance.id,
-        level: 'agent',
-        source: 'agent',
-        message: `Plan synthesized for: "${query.substring(0, 45)}..."`,
-        details: 'AST dependency tree verified in 14ms',
-      });
-    }, 350);
-  };
-
-  const handleRunTerminal = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!terminalInput.trim()) return;
-
-    const cmd = terminalInput.trim();
-    setTerminalInput('');
-
-    onAddLog({
-      instanceId: instance.id,
-      level: 'exec',
-      source: 'shell',
-      message: `$ ${cmd}`,
-    });
-
-    setTimeout(() => {
-      onAddLog({
-        instanceId: instance.id,
-        level: 'info',
-        source: 'runner',
-        message: `[Process] Command completed (exit 0).`,
-      });
-    }, 250);
-  };
-
-  const handleCopyCode = () => {
-    navigator.clipboard.writeText(`// SoftwareDesignSpecModal.tsx\n<select value={selectedSubsystemId} onChange={(e) => handleSelectSubsystem(e.target.value)} ...>`);
-    setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
-  };
-
-  const handleCopyCli = () => {
-    navigator.clipboard.writeText(generateShellOneLiner(instance));
-    setCopiedCli(true);
-    setTimeout(() => setCopiedCli(false), 2000);
-  };
+  const instanceLogs = logs.filter((l) => l.instanceId === instance.id);
+  const resolvedPath = instance.workspacePath || instance.profileDir || 'Default';
 
   const handleCreateDesktopShortcut = async () => {
     if (isTauri()) {
@@ -146,58 +58,51 @@ export function AntigravityWorkspace({
         await invoke('create_desktop_shortcut', { id: instance.id });
         setShortcutCreated(true);
         setTimeout(() => setShortcutCreated(false), 3000);
+        onAddLog({
+          instanceId: instance.id,
+          level: 'info',
+          source: 'system',
+          message: `Created desktop shortcut: ${instance.name}.lnk with official icon.`,
+        });
       } catch (err) {
         console.error('Failed to create shortcut:', err);
       }
-    } else {
-      downloadFile(`${instance.name}.bat`, generateWindowsBatch(instance, account));
-      setShortcutCreated(true);
-      setTimeout(() => setShortcutCreated(false), 3000);
     }
   };
 
-  const instanceLogs = logs.filter((l) => l.instanceId === instance.id);
+  const handleCopyPath = () => {
+    navigator.clipboard.writeText(resolvedPath);
+    setCopiedPath(true);
+    setTimeout(() => setCopiedPath(false), 2000);
+  };
 
-  // Exact code content from Image 1
-  const codeLines = [
-    { line: 639, text: '              <select' },
-    { line: 640, text: '                value=' },
-    { line: 641, text: '                onChange={(e) =>' },
-    { line: 642, text: '                  handleSelectSubsystem(e.target.va' },
-    { line: 643, text: '                className={`px-2' },
-    { line: 644, text: '                  py-1 text-xs rounded border font-' },
-    { line: 645, text: '                  mono outline-hidden ${' },
-    { line: 646, text: '                    isLight' },
-    { line: 647, text: '                      ? \'bg-white' },
-    { line: 648, text: '                  border-slate-300 text-slate-800\'' },
-    { line: 649, text: '                      : \'bg-' },
-    { line: 650, text: '                  [#1F2227] border-[#363C44] text-' },
-    { line: 651, text: '                  gray-200 focus:border-[#0DA3AB]\'' },
-    { line: 652, text: '                  }`}' },
-    { line: 653, text: '              >' },
-    { line: 654, text: '                <option' },
-    { line: 655, text: '                  value="facility">🏢 Full' },
-    { line: 656, text: '                  Facility Consolidated' },
-    { line: 657, text: '                  View</option>' },
-    { line: 658, text: '                {workspaceSpec.subsystems.map(sub' },
-    { line: 659, text: '                  => (' },
-    { line: 660, text: '                    <option key=' },
-    { line: 661, text: '                      {sub.id} value={sub.id}>' },
-    { line: 662, text: '                      {sub.name}' },
-    { line: 663, text: '                      ({sub.role})' },
-    { line: 664, text: '                    </option>' },
-    { line: 665, text: '                  ))}' },
-    { line: 666, text: '              </select>' },
-  ];
+  const handleRevealInExplorer = async () => {
+    if (isTauri()) {
+      try {
+        await invoke('open_in_explorer', { path: resolvedPath });
+      } catch (err) {
+        console.error('Failed to open in explorer:', err);
+      }
+    }
+  };
+
+  const handleCopyAllLogs = () => {
+    const text = instanceLogs
+      .map((l) => `[${l.timestamp}] [${l.level.toUpperCase()}] [${l.source}] ${l.message}`)
+      .join('\n');
+    navigator.clipboard.writeText(text || 'No logs recorded.');
+    setCopiedLogs(true);
+    setTimeout(() => setCopiedLogs(false), 2000);
+  };
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#0F1012] text-[#D8DADF]">
-      {/* Top Breadcrumb & Action Header */}
+      {/* 1. Top Breadcrumb & Action Header */}
       <div className="h-10 border-b border-[#212328] px-4 flex items-center justify-between bg-[#141518] shrink-0 select-none">
-        {/* Left: Breadcrumbs & Live Status */}
+        {/* Left: Breadcrumbs & Live Runtime Status */}
         <div className="flex items-center gap-2 text-xs">
           <span className="text-[#7D818C] hover:text-zinc-300 cursor-pointer">
-            {instance.tag || 'Workspace'}
+            {instance.tag || 'Projects'}
           </span>
           <span className="text-[#3D4048]">/</span>
           <span className="text-zinc-200 font-medium truncate max-w-sm">
@@ -221,46 +126,36 @@ export function AntigravityWorkspace({
 
           <div className="h-3 w-[1px] bg-[#2A2C34] mx-1" />
 
-          {/* Clean Neutral Timer */}
+          {/* Live Runtime Timer */}
           <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#1B1C21] border border-[#262830] font-mono text-[11px] text-zinc-300">
-            <span className={`w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-emerald-500' : 'bg-zinc-500'}`} />
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                isRunning
+                  ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse'
+                  : 'bg-zinc-500'
+              }`}
+            />
             <Clock className="w-3 h-3 text-[#7D818C]" />
             <span>{formatSecondsToTime(instance.totalElapsedSeconds)}</span>
           </div>
-
         </div>
 
         {/* Right: Actions */}
         <div className="flex items-center gap-2">
-          {/* Toggle Profile Info Strip */}
-          <button
-            onClick={() => setShowTelemetryBar(!showTelemetryBar)}
-            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs rounded border transition cursor-pointer font-mono ${
-              showTelemetryBar
-                ? 'bg-[#1C1D23] text-zinc-200 border-[#2C2E38]'
-                : 'text-[#7D818C] hover:text-zinc-200 border-transparent hover:bg-[#1C1D23]'
-            }`}
-            title="Toggle Profile & Workspace Details"
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-[#7D818C]" />
-            <span>Profile Details</span>
-            {showTelemetryBar ? <ChevronUp className="w-3 h-3 text-[#7D818C]" /> : <ChevronDown className="w-3 h-3 text-[#7D818C]" />}
-          </button>
-
           {/* Power Toggle */}
           {isRunning ? (
             <button
               onClick={() => onToggleStatus(instance.id, 'paused')}
-              className="p-1 text-[#8B8F9A] hover:text-amber-400 hover:bg-[#1E2026] rounded transition cursor-pointer"
-              title="Pause Instance Session"
+              className="p-1.5 text-[#8B8F9A] hover:text-amber-400 hover:bg-[#1E2026] rounded transition cursor-pointer"
+              title="Pause / Stop Instance Session"
             >
               <Pause className="w-3.5 h-3.5" />
             </button>
           ) : (
             <button
               onClick={() => onToggleStatus(instance.id, 'running')}
-              className="p-1 text-[#8B8F9A] hover:text-emerald-400 hover:bg-[#1E2026] rounded transition cursor-pointer"
-              title="Resume Instance Session"
+              className="p-1.5 text-[#8B8F9A] hover:text-emerald-400 hover:bg-[#1E2026] rounded transition cursor-pointer"
+              title="Resume / Start Instance Session"
             >
               <Play className="w-3.5 h-3.5" />
             </button>
@@ -272,34 +167,40 @@ export function AntigravityWorkspace({
             className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 text-xs text-zinc-200 hover:text-white bg-[#191B22] hover:bg-[#222530] rounded border border-[#2A2E3D] transition cursor-pointer font-mono shadow-2xs"
             title="Create Windows Desktop .lnk shortcut with Antigravity icon"
           >
-            {shortcutCreated ? <Check className="w-3 h-3 text-emerald-400" /> : <Monitor className="w-3 h-3 text-blue-400" />}
+            {shortcutCreated ? (
+              <Check className="w-3 h-3 text-emerald-400" />
+            ) : (
+              <Monitor className="w-3 h-3 text-blue-400" />
+            )}
             <span>{shortcutCreated ? 'Shortcut Created!' : 'Desktop Shortcut'}</span>
           </button>
 
-          {/* Authentic Clean "Open IDE / Antigravity" Button */}
+          {/* Primary Launch Button */}
           <button
             onClick={() => {
               if (onLaunchIde) {
                 onLaunchIde(instance);
               } else {
-                setActiveEditorTab(activeEditorTab === 'code' ? 'logs' : 'code');
+                onToggleStatus(instance.id, 'running');
               }
             }}
-            className="flex items-center gap-1.5 px-2.5 py-1 bg-[#1A56DB] hover:bg-[#1E62F0] text-white rounded text-xs font-medium transition cursor-pointer shadow-sm active:scale-95"
+            className="flex items-center gap-1.5 px-3 py-1 bg-[#1A56DB] hover:bg-[#1E62F0] text-white rounded text-xs font-medium transition cursor-pointer shadow-sm active:scale-95"
             title="Launch native Antigravity window with isolated profile"
           >
             <ExternalLink className="w-3 h-3" />
             <span>{instance.appType === 'antigravity' ? 'Open Antigravity' : 'Open IDE'}</span>
           </button>
 
+          {/* Settings gear */}
           <button
             onClick={() => onOpenSettings(instance)}
-            className="p-1 text-[#7D818C] hover:text-zinc-200 hover:bg-[#1E2026] rounded transition cursor-pointer"
+            className="p-1.5 text-[#7D818C] hover:text-zinc-200 hover:bg-[#1E2026] rounded transition cursor-pointer"
             title="Profile Settings"
           >
             <Settings className="w-3.5 h-3.5" />
           </button>
 
+          {/* Delete button */}
           {onDeleteInstance && (
             showConfirmDelete ? (
               <div className="flex items-center gap-1.5 bg-rose-950/60 border border-rose-800/80 px-2 py-0.5 rounded">
@@ -320,7 +221,7 @@ export function AntigravityWorkspace({
             ) : (
               <button
                 onClick={() => setShowConfirmDelete(true)}
-                className="p-1 text-[#7D818C] hover:text-rose-400 hover:bg-[#1E2026] rounded transition cursor-pointer"
+                className="p-1.5 text-[#7D818C] hover:text-rose-400 hover:bg-[#1E2026] rounded transition cursor-pointer"
                 title="Delete this Instance Profile"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -330,443 +231,263 @@ export function AntigravityWorkspace({
         </div>
       </div>
 
-      {/* Real Profile & Workspace Details Strip */}
-      {showTelemetryBar && (
-        <div className="bg-[#121316] border-b border-[#212328] px-4 py-2 flex flex-wrap items-center justify-between gap-4 text-xs select-none">
-          {/* App Type badge in strip */}
-          <div className="flex items-center gap-2 text-zinc-300">
-            {instance.appType === 'antigravity' ? (
-              <span className="text-emerald-400 flex items-center gap-1.5 font-medium">
-                <Terminal className="w-3.5 h-3.5" />
-                Antigravity (Standalone)
+      {/* 2. Main Workspace Body: Implemented Features Dashboard */}
+      <div className="flex-1 overflow-y-auto p-5 md:p-6 bg-[#0E0F12] space-y-5">
+        {/* Top Status & Launch Control Hero Card */}
+        <div className="border border-[#22242B] rounded-xl p-5 bg-[#141519] shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2.5">
+              <span
+                className={`w-2.5 h-2.5 rounded-full ${
+                  isRunning
+                    ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.9)] animate-pulse'
+                    : 'bg-zinc-600'
+                }`}
+              />
+              <h2 className="text-base font-semibold text-zinc-100 flex items-center gap-2">
+                {instance.name}
+              </h2>
+              <span
+                className={`text-[10.5px] uppercase font-mono px-2 py-0.5 rounded font-semibold ${
+                  isRunning
+                    ? 'bg-emerald-950/50 text-emerald-400 border border-emerald-800/60'
+                    : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+                }`}
+              >
+                {isRunning ? (instance.pid ? `Running • PID ${instance.pid}` : 'Running') : 'Stopped'}
               </span>
+            </div>
+            <p className="text-xs text-zinc-400 font-sans">
+              {instance.description || 'Isolated multi-instance Antigravity workspace profile.'}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2.5 shrink-0">
+            {isRunning ? (
+              <button
+                onClick={() => onToggleStatus(instance.id, 'stopped')}
+                className="px-3.5 py-1.5 bg-[#1F2229] hover:bg-rose-950/60 text-zinc-300 hover:text-rose-300 border border-[#2B2E39] hover:border-rose-800/70 rounded-lg text-xs font-medium transition cursor-pointer flex items-center gap-2"
+              >
+                <Pause className="w-3.5 h-3.5" />
+                <span>Stop Process</span>
+              </button>
             ) : (
-              <span className="text-blue-400 flex items-center gap-1.5 font-medium">
-                <Code className="w-3.5 h-3.5" />
-                Antigravity IDE
-              </span>
+              <button
+                onClick={() => onToggleStatus(instance.id, 'running')}
+                className="px-3.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-600/40 rounded-lg text-xs font-medium transition cursor-pointer flex items-center gap-2"
+              >
+                <Play className="w-3.5 h-3.5" />
+                <span>Start Session</span>
+              </button>
             )}
-            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#1A1B20] text-zinc-400 border border-[#272932]">
-              {account?.name || 'Local Profile'}
-            </span>
-          </div>
 
-          {/* Real Workspace & Profile details */}
-          <div className="flex flex-wrap items-center gap-4 text-[11px] font-mono">
-            <div className="flex items-center gap-1.5 text-[#7D818C]">
-              <span>Workspace Profile:</span>
-              <span className="text-zinc-200 truncate max-w-xs" title={instance.workspacePath}>
-                {instance.workspacePath || instance.profileDir || 'Default'}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-1.5 text-[#7D818C]">
-              <span>Sandbox:</span>
-              <span className="text-zinc-300">Isolated (`mklink /J` Exts)</span>
-            </div>
-          </div>
-
-          {/* Quick Launcher shortcuts */}
-          <div className="flex items-center gap-1.5 text-xs">
             <button
-              onClick={() => downloadFile(`antigravity-${instance.name}.desktop`, generateLinuxDesktopEntry(instance))}
-              className="px-2 py-0.5 rounded bg-[#18191E] hover:bg-[#20222A] text-zinc-300 hover:text-white border border-[#272932] text-[11px] font-mono cursor-pointer transition flex items-center gap-1"
-              title="Download .desktop shortcut"
+              onClick={() => {
+                if (onLaunchIde) {
+                  onLaunchIde(instance);
+                } else {
+                  onToggleStatus(instance.id, 'running');
+                }
+              }}
+              className="px-4 py-1.5 bg-[#1A56DB] hover:bg-[#1E62F0] text-white rounded-lg text-xs font-medium transition cursor-pointer flex items-center gap-2 shadow-sm"
             >
-              <FileText className="w-3 h-3 text-[#7D818C]" />
-              .desktop
-            </button>
-            <button
-              onClick={() => downloadFile(`launch-${instance.name}.bat`, generateWindowsBatch(instance, account))}
-              className="px-2 py-0.5 rounded bg-[#18191E] hover:bg-[#20222A] text-zinc-300 hover:text-white border border-[#272932] text-[11px] font-mono cursor-pointer transition flex items-center gap-1"
-              title="Download .bat shortcut"
-            >
-              <FileCode className="w-3 h-3 text-[#7D818C]" />
-              .bat
-            </button>
-            <button
-              onClick={handleCopyCli}
-              className="p-1 rounded bg-[#18191E] hover:bg-[#20222A] text-[#7D818C] hover:text-zinc-200 border border-[#272932] cursor-pointer transition"
-              title="Copy Shell One-Liner"
-            >
-              {copiedCli ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>{instance.appType === 'antigravity' ? 'Open Antigravity' : 'Open IDE Window'}</span>
             </button>
           </div>
         </div>
-      )}
 
-      {/* Main Split Layout: Left Agent Conversation + Right Code Editor */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-        {/* Left Side: Antigravity AI Agent & Orchestrator Stream */}
-        <div className="w-full lg:w-1/2 flex flex-col border-b lg:border-b-0 lg:border-r border-[#212328] bg-[#0F1012] overflow-hidden">
-          {/* Conversation Content Scroll */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-5 text-sm text-[#D1D5DB] leading-relaxed">
-            {/* User Message Bubble */}
-            <div className="bg-[#16171B] border border-[#24262E] rounded-xl p-3.5 text-xs text-zinc-200 font-sans shadow-xs">
-              <p>
-                Update our handoff.md , go really indepth. Describe what phase we are in, and what we developed and updated if anything. Also have a section at the end for another LLM to read, just fyis and shit. Or you can go indepth. whatever you think it needs to know.
-              </p>
+        {/* 2-Column Grid: Specifications & Real Activity Logs */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* Left Column: Instance Profile Details */}
+          <div className="border border-[#22242B] rounded-xl p-5 bg-[#141519] space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[#202229]">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-blue-400" />
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-300">
+                  Profile Configuration
+                </h3>
+              </div>
+              <button
+                onClick={() => onOpenSettings(instance)}
+                className="text-[11px] text-blue-400 hover:text-blue-300 transition cursor-pointer flex items-center gap-1"
+              >
+                <Settings className="w-3 h-3" />
+                <span>Edit Settings</span>
+              </button>
             </div>
 
-            {/* Antigravity Agent Output */}
-            <div className="space-y-4 text-xs">
-              <div>
-                <h4 className="font-semibold text-zinc-200 mb-2 text-xs">
-                  3. Sacrosanct Architectural Invariants:
-                </h4>
-                <ul className="space-y-1.5 pl-4 list-disc text-[#9CA3AF]">
-                  <li>
-                    <strong className="text-zinc-200">Safety Color Separation:</strong> Safety Red (<code className="text-zinc-300 font-mono">#DC2626</code>), Safety Amber (<code className="text-zinc-300 font-mono">#D97706</code>), Controlled Green (<code className="text-zinc-300 font-mono">#16A34A</code>) are protected ANSI/ISA-101 states. Brand orange must never displace them.
-                  </li>
-                  <li>
-                    <strong className="text-zinc-200">Title Block Protected Geometry:</strong> Viewport 880 × 490; Title Block quadrant <code className="text-zinc-300 font-mono">[500..880px] × [330..490px]</code> is strictly reserved.
-                  </li>
-                  <li>
-                    <strong className="text-zinc-200">SVG XML Entity Escaping:</strong> All bare ampersands must be escaped to <code className="text-zinc-300 font-mono">&amp;amp;</code> to prevent SVG parser crashes.
-                  </li>
-                  <li>
-                    <strong className="text-zinc-200">Encoding Robustness:</strong> European PLC files contain Windows-1252 / ISO-8859-1 bytes; always use lossy decoding fallbacks.
-                  </li>
-                </ul>
+            <div className="space-y-3 text-xs font-mono">
+              {/* App Type */}
+              <div className="p-3 bg-[#18191E] border border-[#23252E] rounded-lg flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] text-zinc-500 uppercase tracking-wider block">App Type</span>
+                  <span className="text-xs font-semibold text-zinc-200 flex items-center gap-1.5 mt-0.5">
+                    {instance.appType === 'antigravity' ? (
+                      <>
+                        <Terminal className="w-3.5 h-3.5 text-emerald-400" />
+                        Antigravity (Standalone App)
+                      </>
+                    ) : (
+                      <>
+                        <Code className="w-3.5 h-3.5 text-blue-400" />
+                        Antigravity IDE (VS Code-based)
+                      </>
+                    )}
+                  </span>
+                </div>
+                <span className="text-[10.5px] px-2 py-0.5 rounded bg-[#20222A] text-zinc-400 border border-[#2A2C36]">
+                  {instance.appType === 'antigravity' ? 'antigravity.exe' : 'Antigravity IDE.exe'}
+                </span>
               </div>
 
-              <div>
-                <h4 className="font-semibold text-zinc-200 mb-2 text-xs">
-                  4. Known Traps & Anti-Patterns to Avoid:
-                </h4>
-                <p className="text-[#9CA3AF] pl-4">
-                  The "Mocked Button" trap, the "Cookie-Cutter Machine" trap, the "Over-Execution" trap (doing all upgrades when only one was asked), and unescaped Mermaid delimiters in markdown.
-                </p>
-              </div>
-
-              <div>
-                <h4 className="font-semibold text-zinc-200 mb-2 text-xs">
-                  5. Mandatory Pre-Flight Verification Protocol:
-                </h4>
-                <p className="text-[#9CA3AF] pl-4">
-                  Mandatory execution of <code className="text-zinc-300 font-mono">cargo test</code> and <code className="text-zinc-300 font-mono">npm run build</code> before concluding turns.
-                </p>
-              </div>
-
-              {/* Verification Status Card */}
-              <div className="pt-2">
-                <h4 className="font-semibold text-zinc-200 mb-2 text-xs">
-                  Verification Status
-                </h4>
-                <div className="space-y-1.5 pl-4 text-[#9CA3AF]">
+              {/* Workspace Profile Directory */}
+              <div className="p-3 bg-[#18191E] border border-[#23252E] rounded-lg space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-zinc-500 uppercase tracking-wider">
+                    Workspace Profile Directory
+                  </span>
                   <div className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                    <span>
-                      <strong className="text-zinc-200">Rust Backend (<code className="text-zinc-300 font-mono">cargo test</code>):</strong> 38/38 tests pass cleanly in 0.09s.
-                    </span>
+                    <button
+                      onClick={handleCopyPath}
+                      className="text-[10.5px] text-zinc-400 hover:text-zinc-200 transition cursor-pointer flex items-center gap-1"
+                      title="Copy path"
+                    >
+                      {copiedPath ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedPath ? 'Copied' : 'Copy'}</span>
+                    </button>
+                    {isTauri() && (
+                      <button
+                        onClick={handleRevealInExplorer}
+                        className="text-[10.5px] text-blue-400 hover:text-blue-300 transition cursor-pointer flex items-center gap-1"
+                        title="Open folder in File Explorer"
+                      >
+                        <Folder className="w-3 h-3" />
+                        <span>Explorer</span>
+                      </button>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                    <span>
-                      <strong className="text-zinc-200">Frontend Production Build (<code className="text-zinc-300 font-mono">npm run build</code>):</strong> 0 errors, compiled in 4.16s via Vite and strict TypeScript.
-                    </span>
-                  </div>
+                </div>
+                <div className="text-[11.5px] text-zinc-200 truncate select-all" title={resolvedPath}>
+                  {resolvedPath}
                 </div>
               </div>
 
-              {/* Diff Summary Bar */}
-              <div className="bg-[#141519] border border-[#24262E] rounded-lg p-2.5 flex items-center justify-between text-xs font-mono">
-                <div className="flex items-center gap-2 text-[#9CA3AF]">
-                  <span>1 file changed</span>
-                  <span className="text-emerald-400">+265</span>
-                  <span className="text-rose-400">-5</span>
-                  <ChevronRight className="w-3.5 h-3.5 text-[#5A5E6B]" />
+              {/* Isolation Mechanism & Sandbox */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="p-2.5 bg-[#18191E] border border-[#23252E] rounded-lg">
+                  <span className="text-[10px] text-zinc-500 uppercase tracking-wider block">Isolation</span>
+                  <span className="text-[11.5px] font-semibold text-emerald-400 mt-0.5 block">
+                    NTFS Junctions
+                  </span>
+                  <span className="text-[10px] text-zinc-500 font-sans block mt-0.5">
+                    No admin privileges required
+                  </span>
+                </div>
+
+                <div className="p-2.5 bg-[#18191E] border border-[#23252E] rounded-lg">
+                  <span className="text-[10px] text-zinc-500 uppercase tracking-wider block">Port</span>
+                  <span className="text-[11.5px] font-semibold text-zinc-200 mt-0.5 block">
+                    :{instance.port || 3000}
+                  </span>
+                  <span className="text-[10px] text-zinc-500 font-sans block mt-0.5">
+                    Dedicated IPC socket
+                  </span>
+                </div>
+              </div>
+
+              {/* Flags & Env */}
+              <div className="p-3 bg-[#18191E] border border-[#23252E] rounded-lg space-y-2">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-zinc-500">Launch Flags:</span>
+                  <span className="text-zinc-300 text-[11px] truncate max-w-xs">
+                    {instance.customFlags || '--enable-anti-entropy'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-xs pt-1 border-t border-[#23252E]">
+                  <span className="text-zinc-500">Environment Variables:</span>
+                  <span className="text-zinc-300 text-[11px]">
+                    {Object.keys(instance.envVars || {}).length} variables configured
+                  </span>
+                </div>
+              </div>
+
+              {/* Desktop Shortcut Action card */}
+              <div className="p-3 bg-[#18191E] border border-[#23252E] rounded-lg flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Monitor className="w-4 h-4 text-blue-400" />
+                  <div>
+                    <span className="text-xs font-semibold text-zinc-200 block">Desktop Shortcut</span>
+                    <span className="text-[10.5px] text-zinc-500 font-sans block">
+                      Direct {instance.name}.lnk with official icon
+                    </span>
+                  </div>
                 </div>
                 <button
-                  onClick={() => setIsDiffReviewed(!isDiffReviewed)}
-                  className="px-2.5 py-1 bg-[#1D1E24] hover:bg-[#252730] text-zinc-200 rounded border border-[#2A2C35] text-xs font-sans transition cursor-pointer flex items-center gap-1.5"
+                  onClick={handleCreateDesktopShortcut}
+                  className="px-2.5 py-1 bg-[#222530] hover:bg-[#2B2E3D] text-zinc-200 hover:text-white rounded border border-[#2F3343] text-xs transition cursor-pointer flex items-center gap-1.5"
                 >
-                  <Code className="w-3 h-3 text-[#7D818C]" />
-                  {isDiffReviewed ? 'Reviewed' : 'Review'}
+                  {shortcutCreated ? <Check className="w-3 h-3 text-emerald-400" /> : <ExternalLink className="w-3 h-3" />}
+                  <span>{shortcutCreated ? 'Created' : 'Add to Desktop'}</span>
                 </button>
               </div>
-
-              {/* Timestamp & Feedback strip */}
-              <div className="flex items-center justify-between text-[11px] text-[#6B7280] pt-1">
-                <span>1h ago</span>
-                <div className="flex items-center gap-2">
-                  <button className="hover:text-zinc-300 p-1 cursor-pointer"><ThumbsUp className="w-3.5 h-3.5" /></button>
-                  <button className="hover:text-zinc-300 p-1 cursor-pointer"><ThumbsDown className="w-3.5 h-3.5" /></button>
-                  <button onClick={handleCopyCode} className="hover:text-zinc-300 p-1 cursor-pointer">
-                    {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-              </div>
             </div>
           </div>
 
-          {/* Bottom Prompt Bar */}
-          <div className="p-3 border-t border-[#212328] bg-[#141518]">
-            <form onSubmit={handleSendPrompt} className="bg-[#18191E] border border-[#272932] rounded-xl p-2.5 focus-within:border-zinc-500 transition-colors">
-              <input
-                type="text"
-                placeholder="Ask anything, @ to mention, / for actions (or run commands)"
-                value={promptInput}
-                onChange={(e) => setPromptInput(e.target.value)}
-                className="w-full bg-transparent border-0 text-xs text-zinc-200 placeholder-[#5D616C] focus:outline-none mb-2"
-              />
-
-              <div className="flex items-center justify-between pt-1 border-t border-[#22242C] text-xs">
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="p-1 text-[#7D818C] hover:text-zinc-200 hover:bg-[#20222A] rounded cursor-pointer"
-                    title="Add context file"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                  </button>
-
-                  {/* Instance Status pill */}
-                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#20222A] text-zinc-300 text-[11px] font-mono border border-[#2A2C36]">
-                    <span className={`w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]' : 'bg-zinc-500'}`} />
-                    <span>{isRunning ? 'Instance Active' : 'Instance Stopped'}</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    className="p-1.5 text-[#7D818C] hover:text-zinc-200 hover:bg-[#20222A] rounded cursor-pointer"
-                    title="Voice input"
-                  >
-                    <Mic className="w-3.5 h-3.5" />
-                  </button>
-
-                  <button
-                    type="submit"
-                    className="p-1.5 bg-[#1A56DB] hover:bg-[#1E62F0] text-white rounded transition cursor-pointer"
-                    title="Submit query"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+          {/* Right Column: Real Process Activity & Console Logs */}
+          <div className="border border-[#22242B] rounded-xl p-5 bg-[#141519] flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-[#202229]">
+              <div className="flex items-center gap-2">
+                <Terminal className="w-4 h-4 text-emerald-400" />
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-300">
+                  Instance Activity Logs
+                </h3>
+                <span className="text-[10.5px] font-mono px-1.5 py-0.2 rounded bg-[#1C1E26] text-zinc-400">
+                  {instanceLogs.length}
+                </span>
               </div>
-            </form>
-          </div>
-        </div>
-
-        {/* Right Side: Code Editor & Interactive Terminal / Telemetry Tab */}
-        <div className="w-full lg:w-1/2 flex flex-col bg-[#0D0E10] overflow-hidden">
-          {/* Editor Tab Header */}
-          <div className="h-9 bg-[#141518] border-b border-[#212328] flex items-center justify-between px-3 select-none text-xs">
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setActiveEditorTab('code')}
-                className={`px-3 py-1.5 border-t-2 font-mono text-[11px] flex items-center gap-1.5 cursor-pointer ${
-                  activeEditorTab === 'code'
-                    ? 'border-zinc-300 bg-[#0D0E10] text-zinc-100 font-medium'
-                    : 'border-transparent text-[#7D818C] hover:text-zinc-300'
-                }`}
-              >
-                <Code className="w-3.5 h-3.5 text-[#7D818C]" />
-                <span>SoftwareDesignSpecModal.tsx</span>
-              </button>
-
-              <button
-                onClick={() => setActiveEditorTab('logs')}
-                className={`px-3 py-1.5 border-t-2 font-mono text-[11px] flex items-center gap-1.5 cursor-pointer ${
-                  activeEditorTab === 'logs'
-                    ? 'border-zinc-300 bg-[#0D0E10] text-zinc-100 font-medium'
-                    : 'border-transparent text-[#7D818C] hover:text-zinc-300'
-                }`}
-              >
-                <Terminal className="w-3.5 h-3.5 text-[#7D818C]" />
-                <span>Terminal & Logs ({instanceLogs.length})</span>
-              </button>
-
-              <button
-                onClick={() => setActiveEditorTab('telemetry')}
-                className={`px-3 py-1.5 border-t-2 font-mono text-[11px] flex items-center gap-1.5 cursor-pointer ${
-                  activeEditorTab === 'telemetry'
-                    ? 'border-zinc-300 bg-[#0D0E10] text-zinc-100 font-medium'
-                    : 'border-transparent text-[#7D818C] hover:text-zinc-300'
-                }`}
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-[#7D818C]" />
-                <span>Account Quotas</span>
-              </button>
+              {instanceLogs.length > 0 && (
+                <button
+                  onClick={handleCopyAllLogs}
+                  className="text-[11px] text-zinc-400 hover:text-zinc-200 transition cursor-pointer flex items-center gap-1"
+                  title="Copy logs to clipboard"
+                >
+                  {copiedLogs ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedLogs ? 'Copied' : 'Copy Logs'}</span>
+                </button>
+              )}
             </div>
 
-            <div className="flex items-center gap-2 text-[#6B7280]">
-              <span className="font-mono text-[10px]">{isRunning ? '● Running' : '○ Stopped'}</span>
-              <button onClick={handleCopyCode} title="Copy code" className="hover:text-zinc-300 cursor-pointer">
-                <Copy className="w-3 h-3" />
-              </button>
-            </div>
-          </div>
-
-          {/* Editor Body */}
-          {activeEditorTab === 'code' ? (
-            <div className="flex-1 overflow-y-auto p-3 font-mono text-[11.5px] leading-relaxed bg-[#0C0D0F] select-text">
-              {codeLines.map((line) => (
-                <div key={line.line} className="flex items-start hover:bg-[#15161A] px-1 py-0.5 rounded">
-                  <span className="w-10 text-[#474A53] select-none text-right pr-4 shrink-0">
-                    {line.line}
-                  </span>
-                  <span className="text-[#9CA3AF] whitespace-pre">
-                    {line.text.replace('<select', '\u003cselect').replace('<option', '\u003coption')}
-                  </span>
+            {/* Logs Terminal Box */}
+            <div className="flex-1 min-h-[300px] mt-3 bg-[#0A0B0E] border border-[#202228] rounded-lg p-3 font-mono text-[11px] overflow-y-auto space-y-1.5 select-text">
+              {instanceLogs.length > 0 ? (
+                instanceLogs.map((log) => (
+                  <div key={log.id} className="flex items-start gap-2 hover:bg-[#121317] p-1 rounded">
+                    <span className="text-[#555966] select-none shrink-0">[{log.timestamp}]</span>
+                    <span
+                      className={`uppercase text-[9.5px] font-semibold px-1 py-0.2 rounded shrink-0 ${
+                        log.level === 'error'
+                          ? 'bg-rose-950/60 text-rose-400 border border-rose-800/40'
+                          : log.level === 'exec'
+                          ? 'bg-blue-950/60 text-blue-400 border border-blue-800/40'
+                          : 'bg-zinc-800 text-zinc-300'
+                      }`}
+                    >
+                      {log.level}
+                    </span>
+                    <span className="text-[#7D818C] shrink-0">[{log.source}]</span>
+                    <span className="text-zinc-300 break-all">{log.message}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center text-center p-6 text-zinc-500 space-y-2">
+                  <Terminal className="w-8 h-8 text-zinc-700 stroke-[1.5]" />
+                  <p className="text-xs">No activity logged for this instance yet.</p>
+                  <p className="text-[11px] text-zinc-600 font-sans max-w-xs">
+                    Click <strong>Open {instance.appType === 'antigravity' ? 'Antigravity' : 'IDE'}</strong> or <strong>Start Session</strong> to launch and inspect process telemetry.
+                  </p>
                 </div>
-              ))}
-            </div>
-          ) : activeEditorTab === 'logs' ? (
-            /* Interactive Terminal & Live Logs Tab */
-            <div className="flex-1 flex flex-col bg-[#0A0B0D]">
-              <div className="flex-1 overflow-y-auto p-3 font-mono text-[11px] space-y-1 select-text">
-                {instanceLogs.map((log) => (
-                  <div key={log.id} className="flex items-start gap-2 hover:bg-[#121317] p-0.5 rounded">
-                    <span className="text-[#474A53] select-none">[{log.timestamp}]</span>
-                    <span className="uppercase font-semibold text-[10px] text-zinc-400">
-                      [{log.level}]
-                    </span>
-                    <span className="text-[#7D818C]">[{log.source}]</span>
-                    <span className="text-zinc-300">{log.message}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Terminal command runner */}
-              <form onSubmit={handleRunTerminal} className="p-2 border-t border-[#212328] bg-[#121316] flex items-center gap-2">
-                <span className="text-zinc-400 font-mono text-xs pl-1">$</span>
-                <input
-                  type="text"
-                  placeholder="Run shell command in workspace (cargo test, npm test, status)..."
-                  value={terminalInput}
-                  onChange={(e) => setTerminalInput(e.target.value)}
-                  className="flex-1 bg-transparent border-0 text-xs font-mono text-zinc-200 focus:outline-none placeholder-[#4D505B]"
-                />
-              </form>
-            </div>
-          ) : (
-            /* Profile Details Tab for this Instance */
-            <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-[#0E0F12] text-xs font-mono">
-              <div className="border border-[#22242B] rounded-xl p-4 bg-[#141519]">
-                <h4 className="text-sm font-semibold text-zinc-100 mb-1 flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-[#7D818C]" />
-                  {account?.name || 'Standard Account'}
-                </h4>
-                <p className="text-[11px] text-[#7D818C] font-sans">
-                  Account email: {account?.email || 'local'} · Tier: {account?.tier || 'Pro'}
-                </p>
-
-                <div className="grid grid-cols-2 gap-3 mt-4">
-                  <div className="bg-[#18191E] p-3 rounded-lg border border-[#24262E]">
-                    <span className="text-[10px] text-[#6B7280] block">SESSION DURATION</span>
-                    <span className="text-sm font-bold text-zinc-100">
-                      {formatSecondsToTime(instance.totalElapsedSeconds)}
-                    </span>
-                    <span className="text-[10px] text-[#7D818C] mt-0.5 block font-sans">
-                      Active session uptime
-                    </span>
-                  </div>
-
-                  <div className="bg-[#18191E] p-3 rounded-lg border border-[#24262E]">
-                    <span className="text-[10px] text-[#6B7280] block">ISOLATION STATUS</span>
-                    <span className="text-sm font-bold text-emerald-400">
-                      Isolated
-                    </span>
-                    <span className="text-[10px] text-[#7D818C] mt-0.5 block font-sans">
-                      NTFS Junctions enabled
-                    </span>
-                  </div>
-                </div>
-
-                <div className="space-y-2 mt-4 pt-3 border-t border-[#1F2026] text-xs">
-                  <div className="flex justify-between text-[#7D818C]">
-                    <span>App Type:</span>
-                    <span className="text-zinc-200 font-semibold">
-                      {instance.appType === 'antigravity' ? 'Antigravity (Standalone Desktop App)' : 'Antigravity IDE (VS Code-based)'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-[#7D818C]">
-                    <span>Workspace Profile Directory:</span>
-                    <span className="text-zinc-200 truncate max-w-xs">{instance.workspacePath || instance.profileDir || 'Default (%USERPROFILE%\\AntigravityProfiles)'}</span>
-                  </div>
-                  <div className="flex justify-between text-[#7D818C]">
-                    <span>Profile Data:</span>
-                    <span className="text-zinc-200 truncate max-w-xs">{instance.profileDir || `%USERPROFILE%\\AntigravityProfiles\\${instance.name}`}</span>
-                  </div>
-                  <div className="flex justify-between text-[#7D818C]">
-                    <span>Custom Launch Flags:</span>
-                    <span className="text-zinc-300 font-mono">{instance.customFlags || 'None'}</span>
-                  </div>
-                  <div className="flex justify-between text-[#7D818C]">
-                    <span>Custom Environment:</span>
-                    <span className="text-zinc-300">{Object.keys(instance.envVars || {}).length} variables configured</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Launcher Files for this Instance */}
-              <div className="border border-[#22242B] rounded-xl p-4 bg-[#141519] space-y-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-semibold text-zinc-200 flex items-center gap-2">
-                    <Monitor className="w-3.5 h-3.5 text-[#7D818C]" />
-                    Desktop Shortcut & Launcher Files
-                  </h4>
-                  <button
-                    onClick={handleCreateDesktopShortcut}
-                    className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-medium cursor-pointer transition flex items-center gap-1.5"
-                  >
-                    {shortcutCreated ? <Check className="w-3.5 h-3.5" /> : <Monitor className="w-3.5 h-3.5" />}
-                    <span>{shortcutCreated ? 'Shortcut Created!' : 'Add Shortcut to Desktop'}</span>
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 gap-2 font-sans">
-                  <button
-                    onClick={() => downloadFile(`antigravity-${instance.name}.desktop`, generateLinuxDesktopEntry(instance))}
-                    className="p-2.5 bg-[#18191E] hover:bg-[#20222A] border border-[#24262E] rounded-lg text-left text-xs transition cursor-pointer"
-                  >
-                    <div className="font-semibold text-zinc-200">.desktop File</div>
-                    <div className="text-[10px] text-[#7D818C] font-mono">Linux Desktop Entry</div>
-                  </button>
-
-                  <button
-                    onClick={() => downloadFile(`launch-${instance.name}.bat`, generateWindowsBatch(instance, account))}
-                    className="p-2.5 bg-[#18191E] hover:bg-[#20222A] border border-[#24262E] rounded-lg text-left text-xs transition cursor-pointer"
-                  >
-                    <div className="font-semibold text-zinc-200">.bat Script</div>
-                    <div className="text-[10px] text-[#7D818C] font-mono">Windows Batch Launcher</div>
-                  </button>
-
-                  <button
-                    onClick={() => downloadFile(`launch-${instance.name}.sh`, generateBashScript(instance))}
-                    className="p-2.5 bg-[#18191E] hover:bg-[#20222A] border border-[#24262E] rounded-lg text-left text-xs transition cursor-pointer"
-                  >
-                    <div className="font-semibold text-zinc-200">.sh Script</div>
-                    <div className="text-[10px] text-[#7D818C] font-mono">macOS / Linux Shell</div>
-                  </button>
-
-                  <button
-                    onClick={() => downloadFile(`${instance.name}.url`, generateUrlShortcut(instance))}
-                    className="p-2.5 bg-[#18191E] hover:bg-[#20222A] border border-[#24262E] rounded-lg text-left text-xs transition cursor-pointer"
-                  >
-                    <div className="font-semibold text-zinc-200">.url Shortcut</div>
-                    <div className="text-[10px] text-[#7D818C] font-mono">Web URI Shortcut</div>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Bottom Telemetry Bar */}
-          <div className="h-7 bg-[#121316] border-t border-[#212328] px-3 flex items-center justify-between text-[10px] font-mono text-[#7D818C] select-none shrink-0">
-            <div className="flex items-center gap-4">
-              <span>Duration: {formatSecondsToTime(instance.totalElapsedSeconds)}</span>
-              <span className="truncate max-w-xs">Workspace: {instance.workspacePath || 'Default'}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className={isRunning ? "text-emerald-500" : "text-zinc-500"}>
-                ● {isRunning ? 'Live Instance' : 'Stopped'}
-              </span>
-              <span className="text-[#3D4048]">|</span>
-              <span>UTF-8</span>
-              <span>TypeScript JSX</span>
+              )}
             </div>
           </div>
         </div>

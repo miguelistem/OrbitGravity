@@ -36,6 +36,8 @@ export interface AntigravityInstance {
   accountId: string;
   appType?: AntigravityAppType;
   createShortcut?: boolean;
+  pid?: number;
+  port?: number;
   
   // Workspace & Environment Settings
   workspacePath: string;

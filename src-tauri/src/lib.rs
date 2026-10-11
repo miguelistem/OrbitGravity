@@ -47,6 +47,7 @@ pub fn run() {
             commands::get_available_binaries,
             commands::pick_folder,
             commands::pick_file,
+            commands::open_in_explorer,
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");
