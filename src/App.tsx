@@ -874,6 +874,7 @@ export default function App() {
         onDelete={handleDeleteInstance}
         accounts={accounts}
         initialInstance={editingInstance}
+        instances={instances}
       />
 
       {/* Account Settings Modal */}

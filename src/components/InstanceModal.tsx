@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { AntigravityInstance, AntigravityAccount, DisplayMode, AntigravityAppType } from '../types/antigravity';
-import { X, Plus, Trash2, Folder, Code, Terminal, Check, AlertTriangle, Monitor } from 'lucide-react';
+import { X, Plus, Trash2, Folder, Code, Terminal, Check, AlertTriangle, Monitor, ChevronDown } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { isTauri } from '../api';
 
@@ -11,6 +11,7 @@ interface InstanceModalProps {
   onDelete?: (id: string) => void;
   accounts: AntigravityAccount[];
   initialInstance?: AntigravityInstance | null;
+  instances?: AntigravityInstance[];
 }
 
 export function InstanceModal({
@@ -20,6 +21,7 @@ export function InstanceModal({
   onDelete,
   accounts,
   initialInstance,
+  instances,
 }: InstanceModalProps) {
   const isEditing = !!initialInstance;
 
@@ -59,9 +61,24 @@ export function InstanceModal({
     { key: 'NODE_ENV', value: 'development' },
   ]);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  const categoryContainerRef = useRef<HTMLDivElement>(null);
 
   // Active tab: 'general' (Workspace) | 'env' (Environment)
   const [activeTab, setActiveTab] = useState<'general' | 'env'>('general');
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        categoryContainerRef.current &&
+        !categoryContainerRef.current.contains(e.target as Node)
+      ) {
+        setIsCategoryDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     setShowConfirmDelete(false);
@@ -216,6 +233,21 @@ export function InstanceModal({
 
   const iconOptions = ['terminal', 'cpu', 'code', 'database', 'zap', 'server', 'layers'];
 
+  const existingCategoryList = Array.from(
+    new Set(
+      (instances || [])
+        .map((i) => i.tag?.trim())
+        .filter((t): t is string => !!t)
+    )
+  );
+  if (existingCategoryList.length === 0) {
+    existingCategoryList.push('Projects', 'Core Infrastructure', 'General Workspaces');
+  }
+
+  const filteredCategories = existingCategoryList.filter((cat) =>
+    cat.toLowerCase().includes((tag || '').toLowerCase())
+  );
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
       <div className="bg-[#121316] border border-[#23252C] rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden text-zinc-300">
@@ -274,15 +306,109 @@ export function InstanceModal({
                   />
                 </div>
 
-                <div>
-                  <label className="block text-zinc-300 font-medium mb-1">Category / Group</label>
-                  <input
-                    type="text"
-                    value={tag}
-                    onChange={(e) => setTag(e.target.value)}
-                    placeholder="e.g. Projects"
-                    className="w-full bg-[#0F1012] border border-[#23252C] rounded-md px-3 py-1.5 text-zinc-200 focus:outline-none focus:border-zinc-500 text-xs"
-                  />
+                <div ref={categoryContainerRef} className="relative">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-zinc-300 font-medium">Category / Group</label>
+                    <span className="text-[10px] text-[#7D818C]">Folder in sidebar</span>
+                  </div>
+
+                  <div className="relative flex items-center">
+                    <input
+                      type="text"
+                      value={tag}
+                      onChange={(e) => {
+                        setTag(e.target.value);
+                        setIsCategoryDropdownOpen(true);
+                      }}
+                      onFocus={() => setIsCategoryDropdownOpen(true)}
+                      placeholder="e.g. Projects"
+                      className="w-full bg-[#0F1012] border border-[#23252C] rounded-md pl-3 pr-8 py-1.5 text-zinc-200 focus:outline-none focus:border-zinc-500 text-xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
+                      className="absolute right-1.5 p-1 text-zinc-400 hover:text-zinc-200 transition cursor-pointer"
+                      title="Select or browse categories"
+                    >
+                      <ChevronDown
+                        className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                          isCategoryDropdownOpen ? 'rotate-180 text-blue-400' : ''
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Dropdown Options List */}
+                  {isCategoryDropdownOpen && (
+                    <div className="absolute left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-[#15171D] border border-[#282B37] rounded-lg shadow-2xl z-50 py-1 text-xs">
+                      <div className="px-3 py-1 text-[10.5px] font-semibold text-zinc-500 uppercase tracking-wider">
+                        Existing Group Folders
+                      </div>
+                      {filteredCategories.length > 0 ? (
+                        filteredCategories.map((cat) => {
+                          const isSelected = tag.trim().toLowerCase() === cat.toLowerCase();
+                          return (
+                            <button
+                              key={cat}
+                              type="button"
+                              onClick={() => {
+                                setTag(cat);
+                                setIsCategoryDropdownOpen(false);
+                              }}
+                              className={`w-full text-left px-3 py-1.5 flex items-center justify-between transition cursor-pointer ${
+                                isSelected
+                                  ? 'bg-[#1E2333] text-blue-400 font-medium'
+                                  : 'text-zinc-300 hover:bg-[#1E2028] hover:text-white'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 truncate">
+                                <Folder className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                                <span className="truncate">{cat}</span>
+                              </div>
+                              {isSelected && <Check className="w-3.5 h-3.5 text-blue-400 shrink-0" />}
+                            </button>
+                          );
+                        })
+                      ) : (
+                        <div className="px-3 py-1.5 text-zinc-400 text-[11px] italic">
+                          No matching existing groups
+                        </div>
+                      )}
+
+                      {tag.trim() &&
+                        !existingCategoryList.some(
+                          (c) => c.toLowerCase() === tag.trim().toLowerCase()
+                        ) && (
+                          <div className="border-t border-[#232530] mt-1 pt-1 px-3 py-1.5 text-zinc-400 text-[11px] flex items-center gap-1.5">
+                            <Plus className="w-3 h-3 text-emerald-400 shrink-0" />
+                            <span className="truncate">
+                              New group: <strong className="text-zinc-200 font-mono">"{tag.trim()}"</strong>
+                            </span>
+                          </div>
+                        )}
+                    </div>
+                  )}
+
+                  {/* Quick pills */}
+                  {!isCategoryDropdownOpen && existingCategoryList.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                      <span className="text-[10px] text-zinc-500">Existing:</span>
+                      {existingCategoryList.slice(0, 4).map((cat) => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => setTag(cat)}
+                          className={`text-[10.5px] px-2 py-0.5 rounded border transition cursor-pointer ${
+                            tag === cat
+                              ? 'bg-blue-950/40 border-blue-600/60 text-blue-300'
+                              : 'bg-[#15171D] border-[#252834] text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
