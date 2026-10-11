@@ -4,6 +4,8 @@
  */
 
 import { useState, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { isTauri } from './api';
 import { AntigravityInstance, AntigravityAccount, LogEntry, InstanceStatus } from './types/antigravity';
 import { INITIAL_ACCOUNTS, INITIAL_INSTANCES, INITIAL_LOGS } from './mock/initialData';
 import { formatCompactNumber } from './utils/formatters';
@@ -143,13 +145,120 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // Initial synchronization with native Tauri backend
+  useEffect(() => {
+    if (isTauri()) {
+      invoke<any[]>('list_instances')
+        .then((rustInstances) => {
+          if (rustInstances && rustInstances.length > 0) {
+            setInstances((prev) => {
+              return rustInstances.map((ri) => {
+                const existing = prev.find((p) => p.id === ri.id || p.name === ri.name);
+                const isRunning = ri.status === 'running';
+                if (existing) {
+                  return {
+                    ...existing,
+                    id: ri.id,
+                    name: ri.name,
+                    status: isRunning ? 'running' : 'stopped',
+                    port: ri.port || existing.port,
+                    workspacePath: ri.workspace_path || existing.workspacePath,
+                  };
+                }
+                return {
+                  id: ri.id,
+                  name: ri.name,
+                  description: 'Managed Antigravity profile instance',
+                  tag: 'Core Infrastructure',
+                  color: 'neutral',
+                  icon: 'terminal',
+                  status: isRunning ? 'running' : 'stopped',
+                  accountId: ri.account_id || accounts[0]?.id || 'acc-enterprise',
+                  workspacePath: ri.workspace_path || 'e:\\Projects',
+                  gitBranch: 'main',
+                  workingDirectory: ri.workspace_path || 'e:\\Projects',
+                  model: 'Gemini 3.8 Flash High',
+                  port: ri.port || 3010,
+                  debugPort: (ri.port || 3010) + 6000,
+                  displayMode: 'desktop-gui',
+                  agentAutonomy: 'semi-autonomous',
+                  ramAllocationMb: 8192,
+                  cpuCores: 4,
+                  envVars: {},
+                  customFlags: '--enable-anti-entropy',
+                  ttlMinutes: 120,
+                  autoSleepIdleMinutes: 15,
+                  startedAt: isRunning ? Date.now() : null,
+                  totalElapsedSeconds: 0,
+                  lastActivityAt: Date.now(),
+                  billableSeconds: 0,
+                  tokensConsumedSession: 0,
+                  requestsMadeSession: 0,
+                  cpuUsagePercent: isRunning ? 12.0 : 0,
+                  ramUsageMb: isRunning ? 1200 : 0,
+                  createdAt: new Date().toISOString(),
+                };
+              });
+            });
+          }
+        })
+        .catch((err) => console.warn('Could not list instances from Tauri:', err));
+    }
+  }, []);
+
   const activeInstance = instances.find((i) => i.id === activeInstanceId) || instances[0];
   const activeAccount = accounts.find((a) => a.id === activeInstance?.accountId) || accounts[0];
 
-  const handleToggleStatus = (id: string, newStatus: InstanceStatus) => {
+  const handleToggleStatus = async (id: string, newStatus: InstanceStatus) => {
     setInstances((prev) =>
       prev.map((inst) => (inst.id === id ? { ...inst, status: newStatus } : inst))
     );
+
+    if (isTauri()) {
+      try {
+        if (newStatus === 'running') {
+          handleAddLog({
+            instanceId: id,
+            level: 'exec',
+            source: 'agent',
+            message: 'Launching isolated Antigravity process with SSH_CONNECTION socket bypass...',
+          });
+          const res = await invoke<any>('launch_instance', { id });
+          handleAddLog({
+            instanceId: id,
+            level: 'info',
+            source: 'system',
+            message: `Antigravity started (PID: ${res?.pid ?? 'active'}). Profile isolated successfully.`,
+          });
+        } else {
+          handleAddLog({
+            instanceId: id,
+            level: 'info',
+            source: 'system',
+            message: 'Stopping Antigravity instance...',
+          });
+          await invoke('stop_instance', { id });
+          handleAddLog({
+            instanceId: id,
+            level: 'info',
+            source: 'system',
+            message: 'Antigravity process terminated.',
+          });
+        }
+      } catch (err: any) {
+        console.error('Failed to toggle native instance:', err);
+        handleAddLog({
+          instanceId: id,
+          level: 'error',
+          source: 'system',
+          message: `Process error: ${err?.message || String(err)}`,
+        });
+      }
+    }
+  };
+
+  const handleLaunchIde = (instance: AntigravityInstance) => {
+    handleToggleStatus(instance.id, 'running');
   };
 
   const handleExtendTtl = (id: string, extraMinutes: number) => {
@@ -175,13 +284,37 @@ export default function App() {
     setLogs((prev) => [...prev, entry]);
   };
 
-  const handleSaveInstance = (data: Partial<AntigravityInstance>) => {
+  const handleSaveInstance = async (data: Partial<AntigravityInstance>) => {
     if (editingInstance) {
       setInstances((prev) =>
         prev.map((inst) => (inst.id === editingInstance.id ? { ...inst, ...data } : inst))
       );
     } else {
-      const newId = `inst-${Date.now().toString(36)}`;
+      let newId = `inst-${Date.now().toString(36)}`;
+
+      if (isTauri()) {
+        try {
+          const rustInst = await invoke<any>('create_instance', {
+            name: data.name || 'New Service Instance',
+            accountId: data.accountId || accounts[0]?.id,
+            mode: 'auth-only',
+            port: data.port || 3010,
+            workspacePath: data.workspacePath,
+          });
+          if (rustInst?.id) {
+            newId = rustInst.id;
+          }
+          handleAddLog({
+            instanceId: newId,
+            level: 'info',
+            source: 'system',
+            message: `Created profile directory with NTFS Junctions: ${rustInst?.profileDir || rustInst?.profile_dir || 'OK'}`,
+          });
+        } catch (err: any) {
+          console.error('Failed to create native instance profile:', err);
+        }
+      }
+
       const newInst: AntigravityInstance = {
         id: newId,
         name: data.name || 'New Service Instance',
@@ -189,30 +322,30 @@ export default function App() {
         tag: data.tag || 'Core Infrastructure',
         color: 'neutral',
         icon: data.icon || 'terminal',
-        status: 'running',
+        status: 'stopped',
         accountId: data.accountId || accounts[0]?.id || 'acc-enterprise',
-        workspacePath: data.workspacePath || '/workspace/services/new-service',
+        workspacePath: data.workspacePath || 'e:\\Projects',
         gitBranch: data.gitBranch || 'main',
-        workingDirectory: data.workspacePath || '/workspace',
+        workingDirectory: data.workspacePath || 'e:\\Projects',
         model: data.model || 'Gemini 3.8 Flash High',
         port: data.port || 3010,
         debugPort: data.debugPort || 9240,
         displayMode: data.displayMode || 'desktop-gui',
-        agentAutonomy: data.agentAutonomy || 'full-autopilot',
+        agentAutonomy: data.agentAutonomy || 'semi-autonomous',
         ramAllocationMb: data.ramAllocationMb || 8192,
         cpuCores: data.cpuCores || 4,
         envVars: data.envVars || {},
         customFlags: data.customFlags || '--enable-anti-entropy',
         ttlMinutes: data.ttlMinutes ?? 120,
         autoSleepIdleMinutes: data.autoSleepIdleMinutes ?? 15,
-        startedAt: Date.now(),
+        startedAt: null,
         totalElapsedSeconds: 0,
         lastActivityAt: Date.now(),
         billableSeconds: 0,
         tokensConsumedSession: 0,
         requestsMadeSession: 0,
-        cpuUsagePercent: 12.0,
-        ramUsageMb: 1200,
+        cpuUsagePercent: 0,
+        ramUsageMb: 0,
         shortcutHotkey: data.shortcutHotkey || 'Ctrl+Alt+6',
         createdAt: new Date().toISOString(),
       };
@@ -637,6 +770,7 @@ export default function App() {
               }}
               onAddLog={handleAddLog}
               onChangeModel={handleChangeModel}
+              onLaunchIde={handleLaunchIde}
             />
           )}
 

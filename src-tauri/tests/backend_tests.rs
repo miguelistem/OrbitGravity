@@ -1,4 +1,4 @@
-use app_lib::detector::{check_junction_support, detect_antigravity_binary, get_base_profiles_dir, get_system_extensions_dir};
+use app_lib::detector::{check_junction_support, detect_antigravity_binary, detect_all_antigravity_binaries, get_base_profiles_dir, get_system_extensions_dir};
 use app_lib::junction::{create_junction, remove_junction, setup_profile_directories};
 use app_lib::shortcut::create_windows_shortcut;
 use app_lib::storage::{get_seed_data, sync_account_stats};
@@ -12,6 +12,16 @@ fn test_antigravity_binary_detection() {
     let bin_path = detected.unwrap();
     assert!(bin_path.exists(), "Detected binary must exist on disk");
     assert!(bin_path.is_file(), "Detected binary must be a file");
+}
+
+#[test]
+fn test_all_antigravity_binaries_detection() {
+    let all = detect_all_antigravity_binaries();
+    println!("All detected binaries: {:?}", all);
+    assert!(!all.is_empty(), "Should detect at least one Antigravity binary");
+    for b in &all {
+        assert!(std::path::Path::new(&b.path).exists(), "Binary path must exist on disk: {}", b.path);
+    }
 }
 
 #[test]

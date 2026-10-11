@@ -1,43 +1,59 @@
 use std::path::PathBuf;
+use crate::models::AntigravityBinaryInfo;
 
 /// Detects the installation path of Google Antigravity or Antigravity IDE on Windows.
 pub fn detect_antigravity_binary() -> Option<PathBuf> {
-    let mut candidates: Vec<PathBuf> = Vec::new();
+    detect_all_antigravity_binaries().into_iter().next().map(|b| PathBuf::from(b.path))
+}
+
+/// Discovers all installed Antigravity variants (IDE vs Desktop client).
+pub fn detect_all_antigravity_binaries() -> Vec<AntigravityBinaryInfo> {
+    let mut found: Vec<AntigravityBinaryInfo> = Vec::new();
+    let mut seen_paths: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    let mut check_and_add = |name: &str, kind: &str, path: PathBuf| {
+        if path.exists() && path.is_file() {
+            let canonical = path.to_string_lossy().to_string();
+            let lower = canonical.to_lowercase();
+            if !seen_paths.contains(&lower) {
+                seen_paths.insert(lower);
+                found.push(AntigravityBinaryInfo {
+                    name: name.to_string(),
+                    path: canonical,
+                    kind: kind.to_string(),
+                });
+            }
+        }
+    };
 
     // 1. User LocalAppData paths
     if let Some(local_app_data) = dirs::data_local_dir() {
-        // e.g. C:\Users\<User>\AppData\Local\Programs\Antigravity IDE\Antigravity IDE.exe
-        candidates.push(local_app_data.join("Programs").join("Antigravity IDE").join("Antigravity IDE.exe"));
-        candidates.push(local_app_data.join("Programs").join("antigravity").join("Antigravity.exe"));
-        candidates.push(local_app_data.join("Programs").join("Antigravity").join("Antigravity.exe"));
-        candidates.push(local_app_data.join("Antigravity IDE").join("Antigravity IDE.exe"));
-        candidates.push(local_app_data.join("antigravity").join("Antigravity.exe"));
+        check_and_add("Antigravity IDE", "ide", local_app_data.join("Programs").join("Antigravity IDE").join("Antigravity IDE.exe"));
+        check_and_add("Antigravity Desktop", "app", local_app_data.join("Programs").join("antigravity").join("Antigravity.exe"));
+        check_and_add("Antigravity Desktop", "app", local_app_data.join("Programs").join("antigravity").join("antigravity.exe"));
+        check_and_add("Antigravity Desktop", "app", local_app_data.join("Programs").join("Antigravity").join("Antigravity.exe"));
+        check_and_add("Antigravity IDE", "ide", local_app_data.join("Antigravity IDE").join("Antigravity IDE.exe"));
+        check_and_add("Antigravity Desktop", "app", local_app_data.join("antigravity").join("Antigravity.exe"));
     }
 
     // 2. User home fallback
     if let Some(home) = dirs::home_dir() {
-        candidates.push(home.join("AppData").join("Local").join("Programs").join("Antigravity IDE").join("Antigravity IDE.exe"));
-        candidates.push(home.join("AppData").join("Local").join("Programs").join("antigravity").join("Antigravity.exe"));
-        candidates.push(home.join("AppData").join("Local").join("Programs").join("Antigravity").join("Antigravity.exe"));
+        check_and_add("Antigravity IDE", "ide", home.join("AppData").join("Local").join("Programs").join("Antigravity IDE").join("Antigravity IDE.exe"));
+        check_and_add("Antigravity Desktop", "app", home.join("AppData").join("Local").join("Programs").join("antigravity").join("Antigravity.exe"));
+        check_and_add("Antigravity Desktop", "app", home.join("AppData").join("Local").join("Programs").join("antigravity").join("antigravity.exe"));
+        check_and_add("Antigravity Desktop", "app", home.join("AppData").join("Local").join("Programs").join("Antigravity").join("Antigravity.exe"));
     }
 
     // 3. Program Files
     if let Ok(prog_files) = std::env::var("ProgramFiles") {
         let p = PathBuf::from(prog_files);
-        candidates.push(p.join("Antigravity IDE").join("Antigravity IDE.exe"));
-        candidates.push(p.join("Antigravity").join("Antigravity.exe"));
+        check_and_add("Antigravity IDE", "ide", p.join("Antigravity IDE").join("Antigravity IDE.exe"));
+        check_and_add("Antigravity Desktop", "app", p.join("Antigravity").join("Antigravity.exe"));
     }
     if let Ok(prog_files_x86) = std::env::var("ProgramFiles(x86)") {
         let p = PathBuf::from(prog_files_x86);
-        candidates.push(p.join("Antigravity IDE").join("Antigravity IDE.exe"));
-        candidates.push(p.join("Antigravity").join("Antigravity.exe"));
-    }
-
-    // Check each candidate path
-    for candidate in &candidates {
-        if candidate.exists() && candidate.is_file() {
-            return Some(candidate.clone());
-        }
+        check_and_add("Antigravity IDE", "ide", p.join("Antigravity IDE").join("Antigravity IDE.exe"));
+        check_and_add("Antigravity Desktop", "app", p.join("Antigravity").join("Antigravity.exe"));
     }
 
     // 4. Try PATH lookup via `where.exe`
@@ -51,15 +67,19 @@ pub fn detect_antigravity_binary() -> Option<PathBuf> {
                 let trimmed = line.trim();
                 if !trimmed.is_empty() {
                     let path = PathBuf::from(trimmed);
-                    if path.exists() && path.is_file() {
-                        return Some(path);
-                    }
+                    let name = if trimmed.to_lowercase().contains("ide") {
+                        "Antigravity IDE"
+                    } else {
+                        "Antigravity Desktop"
+                    };
+                    let kind = if trimmed.to_lowercase().contains("ide") { "ide" } else { "app" };
+                    check_and_add(name, kind, path);
                 }
             }
         }
     }
 
-    None
+    found
 }
 
 /// Returns the base directory for all Antigravity profiles (%USERPROFILE%\AntigravityProfiles).

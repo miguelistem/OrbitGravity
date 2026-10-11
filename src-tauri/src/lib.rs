@@ -43,6 +43,7 @@ pub fn run() {
             commands::window_toggle_maximize,
             commands::window_close,
             commands::window_start_drag,
+            commands::get_available_binaries,
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

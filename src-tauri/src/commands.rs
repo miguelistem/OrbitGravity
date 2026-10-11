@@ -1,10 +1,10 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::State;
 use uuid::Uuid;
 
-use crate::models::{Account, CreateInstanceInput, FleetState, Instance, SystemInfo};
-use crate::detector::{check_junction_support, detect_antigravity_binary, get_base_profiles_dir};
+use crate::models::{Account, AntigravityBinaryInfo, CreateInstanceInput, FleetState, Instance, SystemInfo};
+use crate::detector::{check_junction_support, detect_antigravity_binary, detect_all_antigravity_binaries, get_base_profiles_dir};
 use crate::junction::{remove_junction, setup_profile_directories};
 use crate::process::{launch_antigravity_instance, refresh_instances_status, stop_antigravity_instance};
 use crate::shortcut::{create_windows_shortcut, get_shortcut_destination};
@@ -139,14 +139,20 @@ pub fn create_instance(
     mode: Option<String>,
     port: Option<u16>,
     workspace_path: Option<String>,
+    binary_path: Option<String>,
 ) -> Result<Instance, String> {
-    let input = payload.or(instance).unwrap_or(CreateInstanceInput {
+    let mut input = payload.or(instance).unwrap_or(CreateInstanceInput {
         name: name.unwrap_or_else(|| "New Instance".to_string()),
         account_id,
         mode,
         port,
         workspace_path,
+        binary_path: None,
     });
+
+    if input.binary_path.is_none() && binary_path.is_some() {
+        input.binary_path = binary_path;
+    }
 
     if input.name.trim().is_empty() {
         return Err("Instance name cannot be empty".to_string());
@@ -194,6 +200,7 @@ pub fn create_instance(
         profile_dir: profile_dir_str,
         pid: None,
         last_used: "Just created".to_string(),
+        binary_path: input.binary_path,
     };
 
     fleet.instances.push(new_instance.clone());
@@ -265,8 +272,10 @@ pub fn create_desktop_shortcut(
     let instance = fleet.instances.iter().find(|i| i.id == target_id)
         .ok_or_else(|| format!("Instance with id '{}' not found", target_id))?;
 
-    let binary = detect_antigravity_binary()
-        .ok_or("Antigravity binary not found to create shortcut")?;
+    let binary = match &instance.binary_path {
+        Some(custom) if Path::new(custom).exists() => PathBuf::from(custom),
+        _ => detect_antigravity_binary().ok_or("Antigravity binary not found to create shortcut")?,
+    };
 
     let profile_path = Path::new(&instance.profile_dir);
     let data_dir = profile_path.join("data");
@@ -318,5 +327,10 @@ pub fn window_close(window: tauri::Window) -> Result<(), String> {
 #[tauri::command]
 pub fn window_start_drag(window: tauri::Window) -> Result<(), String> {
     window.start_dragging().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_available_binaries() -> Result<Vec<AntigravityBinaryInfo>, String> {
+    Ok(detect_all_antigravity_binaries())
 }
 

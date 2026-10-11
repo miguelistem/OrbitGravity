@@ -56,8 +56,11 @@ pub fn refresh_instances_status(instances: &mut [Instance]) {
 
 /// Spawns an Antigravity instance with complete environment isolation.
 pub fn launch_antigravity_instance(instance: &mut Instance) -> Result<(), String> {
-    let binary_path = detect_antigravity_binary()
-        .ok_or_else(|| "Antigravity binary not found on the system. Please ensure Antigravity IDE is installed.".to_string())?;
+    let binary_path = match &instance.binary_path {
+        Some(custom) if Path::new(custom).exists() => std::path::PathBuf::from(custom),
+        _ => detect_antigravity_binary()
+            .ok_or_else(|| "Antigravity binary not found on the system. Please ensure Antigravity IDE or Antigravity is installed.".to_string())?,
+    };
 
     let profile_path = Path::new(&instance.profile_dir);
     setup_profile_directories(profile_path, &instance.mode)?;
@@ -86,6 +89,7 @@ pub fn launch_antigravity_instance(instance: &mut Instance) -> Result<(), String
     cmd.env("APPDATA", roaming_dir.as_os_str())
        .env("LOCALAPPDATA", local_dir.as_os_str())
        .env("USERPROFILE", profile_path.as_os_str())
+       .env("SSH_CONNECTION", "127.0.0.1 1234 127.0.0.1 22")
        .env("BETTERMULTIGRAVITY_INSTANCE_ID", &instance.id)
        .env("BETTERMULTIGRAVITY_PORT", instance.port.to_string())
        .stdin(std::process::Stdio::null())

@@ -49,6 +49,15 @@ pub struct Instance {
     pub pid: Option<u32>,
     #[serde(alias = "lastUsed")]
     pub last_used: String,
+    #[serde(default, alias = "binaryPath")]
+    pub binary_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AntigravityBinaryInfo {
+    pub name: String,
+    pub path: String,
+    pub kind: String, // "ide" | "app"
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -78,4 +87,6 @@ pub struct CreateInstanceInput {
     pub port: Option<u16>,
     #[serde(alias = "workspacePath")]
     pub workspace_path: Option<String>,
+    #[serde(default, alias = "binaryPath")]
+    pub binary_path: Option<String>,
 }

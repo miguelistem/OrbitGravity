@@ -50,6 +50,7 @@ interface AntigravityWorkspaceProps {
   onOpenSettings: (instance: AntigravityInstance) => void;
   onAddLog: (log: Omit<LogEntry, 'id' | 'timestamp'>) => void;
   onChangeModel: (instanceId: string, model: string) => void;
+  onLaunchIde?: (instance: AntigravityInstance) => void;
 }
 
 export function AntigravityWorkspace({
@@ -61,6 +62,7 @@ export function AntigravityWorkspace({
   onOpenSettings,
   onAddLog,
   onChangeModel,
+  onLaunchIde,
 }: AntigravityWorkspaceProps) {
   const [activeEditorTab, setActiveEditorTab] = useState<'code' | 'logs' | 'telemetry'>('code');
   const [showTelemetryBar, setShowTelemetryBar] = useState(true);
@@ -263,8 +265,15 @@ export function AntigravityWorkspace({
 
           {/* Authentic Clean "Open IDE" Button */}
           <button
-            onClick={() => setActiveEditorTab(activeEditorTab === 'code' ? 'logs' : 'code')}
-            className="flex items-center gap-1.5 px-2.5 py-1 bg-[#1A56DB] hover:bg-[#1E62F0] text-white rounded text-xs font-medium transition cursor-pointer"
+            onClick={() => {
+              if (onLaunchIde) {
+                onLaunchIde(instance);
+              } else {
+                setActiveEditorTab(activeEditorTab === 'code' ? 'logs' : 'code');
+              }
+            }}
+            className="flex items-center gap-1.5 px-2.5 py-1 bg-[#1A56DB] hover:bg-[#1E62F0] text-white rounded text-xs font-medium transition cursor-pointer shadow-sm active:scale-95"
+            title="Launch native Antigravity window with isolated profile"
           >
             <ExternalLink className="w-3 h-3" />
             <span>Open IDE</span>

@@ -90,6 +90,7 @@ pub fn get_seed_data() -> FleetState {
             profile_dir: profiles_base.join("FrontendMonorepo").to_string_lossy().to_string(),
             pid: None,
             last_used: "12m ago".to_string(),
+            binary_path: None,
         },
         Instance {
             id: "inst-2".to_string(),
@@ -103,6 +104,7 @@ pub fn get_seed_data() -> FleetState {
             profile_dir: profiles_base.join("CoreAgentEngine").to_string_lossy().to_string(),
             pid: None,
             last_used: "2h ago".to_string(),
+            binary_path: None,
         },
         Instance {
             id: "inst-3".to_string(),
@@ -116,6 +118,7 @@ pub fn get_seed_data() -> FleetState {
             profile_dir: profiles_base.join("TelemetryPipeline").to_string_lossy().to_string(),
             pid: None,
             last_used: "Yesterday".to_string(),
+            binary_path: None,
         },
     ];
 
