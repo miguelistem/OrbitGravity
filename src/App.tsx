@@ -729,18 +729,6 @@ export default function App() {
                                     <span className="text-[12px] font-mono text-[#787D8A] group-hover:text-[#A6ABB8]">
                                       {formatInstanceDurationBadge(inst)}
                                     </span>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (window.confirm(`Delete instance "${inst.name}"?`)) {
-                                          handleDeleteInstance(inst.id);
-                                        }
-                                      }}
-                                      className="opacity-0 group-hover:opacity-100 p-1 hover:text-rose-400 text-zinc-500 rounded transition"
-                                      title="Delete instance"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
                                   </div>
                                 </div>
                               );
