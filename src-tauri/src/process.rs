@@ -85,14 +85,31 @@ pub fn launch_antigravity_instance(instance: &mut Instance) -> Result<(), String
         }
     }
 
+    // Apply user-configured custom CLI flags
+    if let Some(ref flags) = instance.custom_flags {
+        for flag in flags.split_whitespace() {
+            if !flag.is_empty() {
+                cmd.arg(flag);
+            }
+        }
+    }
+
     // Set isolated Windows environment variables so credentials/sessions never collide
     cmd.env("APPDATA", roaming_dir.as_os_str())
        .env("LOCALAPPDATA", local_dir.as_os_str())
        .env("USERPROFILE", profile_path.as_os_str())
        .env("SSH_CONNECTION", "127.0.0.1 1234 127.0.0.1 22")
        .env("BETTERMULTIGRAVITY_INSTANCE_ID", &instance.id)
-       .env("BETTERMULTIGRAVITY_PORT", instance.port.to_string())
-       .stdin(std::process::Stdio::null())
+       .env("BETTERMULTIGRAVITY_PORT", instance.port.to_string());
+
+    // Apply user-configured environment variables
+    if let Some(ref env_map) = instance.env_vars {
+        for (k, v) in env_map {
+            cmd.env(k, v);
+        }
+    }
+
+    cmd.stdin(std::process::Stdio::null())
        .stdout(std::process::Stdio::null())
        .stderr(std::process::Stdio::null());
 

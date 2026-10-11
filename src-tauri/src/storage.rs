@@ -91,6 +91,8 @@ pub fn get_seed_data() -> FleetState {
             pid: None,
             last_used: "12m ago".to_string(),
             binary_path: None,
+            custom_flags: None,
+            env_vars: None,
         },
         Instance {
             id: "inst-2".to_string(),
@@ -105,6 +107,8 @@ pub fn get_seed_data() -> FleetState {
             pid: None,
             last_used: "2h ago".to_string(),
             binary_path: None,
+            custom_flags: None,
+            env_vars: None,
         },
         Instance {
             id: "inst-3".to_string(),
@@ -119,6 +123,8 @@ pub fn get_seed_data() -> FleetState {
             pid: None,
             last_used: "Yesterday".to_string(),
             binary_path: None,
+            custom_flags: None,
+            env_vars: None,
         },
     ];
 

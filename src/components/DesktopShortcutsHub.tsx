@@ -148,23 +148,17 @@ export function DesktopShortcutsHub({
                       <h4 className="text-xs font-medium text-zinc-200 truncate">
                         {instance.name}
                       </h4>
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isRunning ? 'bg-emerald-500' : 'bg-zinc-500'}`} />
-                      {instance.shortcutHotkey && (
-                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#1C1D22] text-[#7D818C] border border-[#262830]">
-                          {instance.shortcutHotkey}
-                        </span>
-                      )}
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isRunning ? 'bg-emerald-500 shadow-[0_0_6px_rgba(52,211,153,0.8)]' : 'bg-zinc-500'}`} />
+                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#1C1D22] text-[#7D818C] border border-[#262830]">
+                        {isRunning ? 'active' : 'stopped'}
+                      </span>
                     </div>
 
                     <div className="flex items-center gap-2 text-[11px] text-[#7D818C] font-mono mt-0.5">
-                      <span className="flex items-center gap-1 truncate max-w-xs text-zinc-400">
+                      <span className="flex items-center gap-1 truncate max-w-sm text-zinc-400">
                         <Folder className="w-3 h-3 text-[#5A5D66]" />
-                        {instance.workspacePath}
+                        {instance.workspacePath || '%USERPROFILE%\\AntigravityProfiles\\' + instance.name}
                       </span>
-                      <span>·</span>
-                      <span>Port :{instance.port}</span>
-                      <span>·</span>
-                      <span>{instance.model}</span>
                     </div>
                   </div>
                 </div>
@@ -177,7 +171,7 @@ export function DesktopShortcutsHub({
                       {formatSecondsToTime(instance.totalElapsedSeconds)}
                     </div>
                     <div className="text-[10px] text-[#6B7280]">
-                      {formatCompactNumber(instance.tokensConsumedSession)} tokens
+                      {isRunning ? 'Uptime' : 'Duration'}
                     </div>
                   </div>
 

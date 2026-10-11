@@ -148,6 +148,8 @@ pub fn create_instance(
         port,
         workspace_path,
         binary_path: None,
+        custom_flags: None,
+        env_vars: None,
     });
 
     if input.binary_path.is_none() && binary_path.is_some() {
@@ -201,6 +203,8 @@ pub fn create_instance(
         pid: None,
         last_used: "Just created".to_string(),
         binary_path: input.binary_path,
+        custom_flags: input.custom_flags,
+        env_vars: input.env_vars,
     };
 
     fleet.instances.push(new_instance.clone());
@@ -332,5 +336,21 @@ pub fn window_start_drag(window: tauri::Window) -> Result<(), String> {
 #[tauri::command]
 pub fn get_available_binaries() -> Result<Vec<AntigravityBinaryInfo>, String> {
     Ok(detect_all_antigravity_binaries())
+}
+
+#[tauri::command]
+pub fn pick_folder() -> Result<Option<String>, String> {
+    let folder = rfd::FileDialog::new()
+        .set_title("Select Workspace Directory")
+        .pick_folder();
+    Ok(folder.map(|p| p.to_string_lossy().to_string()))
+}
+
+#[tauri::command]
+pub fn pick_file() -> Result<Option<String>, String> {
+    let file = rfd::FileDialog::new()
+        .set_title("Select Workspace File or Project")
+        .pick_file();
+    Ok(file.map(|p| p.to_string_lossy().to_string()))
 }
 

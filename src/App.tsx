@@ -118,25 +118,9 @@ export default function App() {
       setInstances((prevInstances) => {
         return prevInstances.map((inst) => {
           if (inst.status !== 'running') return inst;
-
-          const newElapsed = inst.totalElapsedSeconds + 1;
-          const newTokens = inst.tokensConsumedSession + Math.floor(Math.random() * 15 + 4);
-
-          let newStatus: InstanceStatus = inst.status;
-          if (inst.ttlMinutes > 0 && newElapsed >= inst.ttlMinutes * 60) {
-            newStatus = 'paused';
-          }
-
-          const cpuJitter = Math.max(2, Math.min(65, +(inst.cpuUsagePercent + (Math.random() * 2 - 1)).toFixed(1)));
-          const ramJitter = Math.max(500, Math.min(inst.ramAllocationMb, +(inst.ramUsageMb + (Math.random() * 4 - 2)).toFixed(0)));
-
           return {
             ...inst,
-            totalElapsedSeconds: newElapsed,
-            tokensConsumedSession: newTokens,
-            status: newStatus,
-            cpuUsagePercent: cpuJitter,
-            ramUsageMb: ramJitter,
+            totalElapsedSeconds: inst.totalElapsedSeconds + 1,
           };
         });
       });
@@ -161,8 +145,10 @@ export default function App() {
                     id: ri.id,
                     name: ri.name,
                     status: isRunning ? 'running' : 'stopped',
-                    port: ri.port || existing.port,
                     workspacePath: ri.workspace_path || existing.workspacePath,
+                    profileDir: ri.profile_dir || existing.profileDir,
+                    customFlags: ri.custom_flags || existing.customFlags,
+                    envVars: ri.env_vars || existing.envVars,
                   };
                 }
                 return {
@@ -174,28 +160,14 @@ export default function App() {
                   icon: 'terminal',
                   status: isRunning ? 'running' : 'stopped',
                   accountId: ri.account_id || accounts[0]?.id || 'acc-enterprise',
-                  workspacePath: ri.workspace_path || 'e:\\Projects',
-                  gitBranch: 'main',
-                  workingDirectory: ri.workspace_path || 'e:\\Projects',
-                  model: 'Gemini 3.8 Flash High',
-                  port: ri.port || 3010,
-                  debugPort: (ri.port || 3010) + 6000,
+                  workspacePath: ri.workspace_path || '',
+                  profileDir: ri.profile_dir || '',
                   displayMode: 'desktop-gui',
-                  agentAutonomy: 'semi-autonomous',
-                  ramAllocationMb: 8192,
-                  cpuCores: 4,
-                  envVars: {},
-                  customFlags: '--enable-anti-entropy',
-                  ttlMinutes: 120,
-                  autoSleepIdleMinutes: 15,
+                  envVars: ri.env_vars || {},
+                  customFlags: ri.custom_flags || '',
                   startedAt: isRunning ? Date.now() : null,
                   totalElapsedSeconds: 0,
                   lastActivityAt: Date.now(),
-                  billableSeconds: 0,
-                  tokensConsumedSession: 0,
-                  requestsMadeSession: 0,
-                  cpuUsagePercent: isRunning ? 12.0 : 0,
-                  ramUsageMb: isRunning ? 1200 : 0,
                   createdAt: new Date().toISOString(),
                 };
               });
@@ -261,18 +233,6 @@ export default function App() {
     handleToggleStatus(instance.id, 'running');
   };
 
-  const handleExtendTtl = (id: string, extraMinutes: number) => {
-    setInstances((prev) =>
-      prev.map((inst) => (inst.id === id ? { ...inst, ttlMinutes: (inst.ttlMinutes || 60) + extraMinutes } : inst))
-    );
-  };
-
-  const handleChangeModel = (id: string, model: string) => {
-    setInstances((prev) =>
-      prev.map((inst) => (inst.id === id ? { ...inst, model } : inst))
-    );
-  };
-
   const handleAddLog = (newLog: Omit<LogEntry, 'id' | 'timestamp'>) => {
     const now = new Date();
     const timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}.${now.getMilliseconds().toString().padStart(3, '0')}`;
@@ -291,6 +251,7 @@ export default function App() {
       );
     } else {
       let newId = `inst-${Date.now().toString(36)}`;
+      let profileDir = `C:\\Users\\Miguel\\AntigravityProfiles\\${(data.name || 'Instance').replace(/[^a-zA-Z0-9_-]/g, '')}`;
 
       if (isTauri()) {
         try {
@@ -298,17 +259,21 @@ export default function App() {
             name: data.name || 'New Service Instance',
             accountId: data.accountId || accounts[0]?.id,
             mode: 'auth-only',
-            port: data.port || 3010,
             workspacePath: data.workspacePath,
+            customFlags: data.customFlags,
+            envVars: data.envVars,
           });
           if (rustInst?.id) {
             newId = rustInst.id;
+          }
+          if (rustInst?.profileDir || rustInst?.profile_dir) {
+            profileDir = rustInst.profileDir || rustInst.profile_dir;
           }
           handleAddLog({
             instanceId: newId,
             level: 'info',
             source: 'system',
-            message: `Created profile directory with NTFS Junctions: ${rustInst?.profileDir || rustInst?.profile_dir || 'OK'}`,
+            message: `Created profile directory with NTFS Junctions: ${profileDir}`,
           });
         } catch (err: any) {
           console.error('Failed to create native instance profile:', err);
@@ -319,34 +284,19 @@ export default function App() {
         id: newId,
         name: data.name || 'New Service Instance',
         description: data.description || '',
-        tag: data.tag || 'Core Infrastructure',
+        tag: data.tag || 'Projects',
         color: 'neutral',
         icon: data.icon || 'terminal',
         status: 'stopped',
         accountId: data.accountId || accounts[0]?.id || 'acc-enterprise',
-        workspacePath: data.workspacePath || 'e:\\Projects',
-        gitBranch: data.gitBranch || 'main',
-        workingDirectory: data.workspacePath || 'e:\\Projects',
-        model: data.model || 'Gemini 3.8 Flash High',
-        port: data.port || 3010,
-        debugPort: data.debugPort || 9240,
+        workspacePath: data.workspacePath || profileDir,
+        profileDir,
         displayMode: data.displayMode || 'desktop-gui',
-        agentAutonomy: data.agentAutonomy || 'semi-autonomous',
-        ramAllocationMb: data.ramAllocationMb || 8192,
-        cpuCores: data.cpuCores || 4,
         envVars: data.envVars || {},
         customFlags: data.customFlags || '--enable-anti-entropy',
-        ttlMinutes: data.ttlMinutes ?? 120,
-        autoSleepIdleMinutes: data.autoSleepIdleMinutes ?? 15,
         startedAt: null,
         totalElapsedSeconds: 0,
         lastActivityAt: Date.now(),
-        billableSeconds: 0,
-        tokensConsumedSession: 0,
-        requestsMadeSession: 0,
-        cpuUsagePercent: 0,
-        ramUsageMb: 0,
-        shortcutHotkey: data.shortcutHotkey || 'Ctrl+Alt+6',
         createdAt: new Date().toISOString(),
       };
       setInstances((prev) => [newInst, ...prev]);
@@ -388,7 +338,7 @@ export default function App() {
       const remainingMins = Math.floor((elapsed % 3600) / 60);
       return remainingMins > 0 ? `${hrs}h ${remainingMins}m` : `${hrs}h`;
     }
-    return `:${inst.port}`;
+    return 'stopped';
   };
 
   const handleMinimizeWindow = async (e: React.MouseEvent) => {
@@ -594,14 +544,14 @@ export default function App() {
                     ? 'bg-[#262832] text-white font-medium'
                     : 'hover:bg-[#1E2028] hover:text-white'
                 }`}
-                title="Account Quotas"
+                title="Account Profiles"
               >
                 <div className="flex items-center gap-2.5">
                   <ShieldCheck className="w-[18px] h-[18px] text-[#9A9EA8] shrink-0" />
-                  {!sidebarCollapsed && <span>Account Quotas</span>}
+                  {!sidebarCollapsed && <span>Account Profiles</span>}
                 </div>
                 {!sidebarCollapsed && (
-                  <span className="text-xs text-zinc-300 font-mono">68%</span>
+                  <span className="text-xs font-mono text-[#8B8F9A] px-1.5 py-0.2 rounded bg-[#1C1E25]">{accounts.length}</span>
                 )}
               </button>
             </div>
@@ -763,13 +713,11 @@ export default function App() {
               account={activeAccount}
               logs={logs}
               onToggleStatus={handleToggleStatus}
-              onExtendTtl={handleExtendTtl}
               onOpenSettings={(inst) => {
                 setEditingInstance(inst);
                 setIsInstanceModalOpen(true);
               }}
               onAddLog={handleAddLog}
-              onChangeModel={handleChangeModel}
               onLaunchIde={handleLaunchIde}
             />
           )}

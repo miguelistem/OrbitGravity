@@ -28,41 +28,23 @@ export interface AntigravityInstance {
   name: string;
   description: string;
   tag: string;
-  color: string; // e.g. 'cyan', 'emerald', 'violet', 'amber', 'rose', 'blue'
-  icon: string; // 'terminal' | 'cpu' | 'code' | 'layers' | 'zap' | 'bot' | 'database' | 'server'
+  color: string;
+  icon: string;
   status: InstanceStatus;
   accountId: string;
   
   // Workspace & Environment Settings
   workspacePath: string;
-  gitBranch: string;
-  workingDirectory: string;
-  model: string;
-  port: number;
-  debugPort: number;
-  displayMode: DisplayMode;
-  agentAutonomy: AgentAutonomy;
-  ramAllocationMb: number;
-  cpuCores: number;
+  profileDir?: string;
+  binaryPath?: string;
+  displayMode?: DisplayMode;
   envVars: Record<string, string>;
   customFlags: string;
   
-  // Timers & Limiting Settings
-  ttlMinutes: number; // Max session duration before auto-shutdown (0 = infinite)
-  autoSleepIdleMinutes: number; // Idle minutes before auto-pausing (0 = disabled)
-  
-  // Dynamic State & Telemetry
-  startedAt: number | null; // epoch ms
-  totalElapsedSeconds: number; // cumulative running seconds
-  lastActivityAt: number; // epoch ms
-  billableSeconds: number;
-  tokensConsumedSession: number;
-  requestsMadeSession: number;
-  cpuUsagePercent: number;
-  ramUsageMb: number;
-  
-  // Desktop Shortcut Metadata
-  shortcutHotkey?: string;
+  // Real Timers & Activity
+  startedAt: number | null;
+  totalElapsedSeconds: number; // Real session duration in seconds
+  lastActivityAt: number;
   createdAt: string;
 }
 

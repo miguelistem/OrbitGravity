@@ -46,10 +46,8 @@ interface AntigravityWorkspaceProps {
   account?: AntigravityAccount;
   logs: LogEntry[];
   onToggleStatus: (id: string, newStatus: 'running' | 'paused' | 'stopped') => void;
-  onExtendTtl: (id: string, extraMinutes: number) => void;
   onOpenSettings: (instance: AntigravityInstance) => void;
   onAddLog: (log: Omit<LogEntry, 'id' | 'timestamp'>) => void;
-  onChangeModel: (instanceId: string, model: string) => void;
   onLaunchIde?: (instance: AntigravityInstance) => void;
 }
 
@@ -58,10 +56,8 @@ export function AntigravityWorkspace({
   account,
   logs,
   onToggleStatus,
-  onExtendTtl,
   onOpenSettings,
   onAddLog,
-  onChangeModel,
   onLaunchIde,
 }: AntigravityWorkspaceProps) {
   const [activeEditorTab, setActiveEditorTab] = useState<'code' | 'logs' | 'telemetry'>('code');
@@ -70,19 +66,9 @@ export function AntigravityWorkspace({
   const [terminalInput, setTerminalInput] = useState('');
   const [isCopied, setIsCopied] = useState(false);
   const [copiedCli, setCopiedCli] = useState(false);
-  const [showModelPicker, setShowModelPicker] = useState(false);
   const [isDiffReviewed, setIsDiffReviewed] = useState(false);
 
   const isRunning = instance.status === 'running';
-
-  // TTL calculation
-  const ttlSecondsTotal = instance.ttlMinutes > 0 ? instance.ttlMinutes * 60 : 0;
-  const ttlRemainingSeconds = instance.ttlMinutes > 0 ? Math.max(0, ttlSecondsTotal - instance.totalElapsedSeconds) : 0;
-
-  // Account quota calculations
-  const tokenAllowance = account?.monthlyTokenAllowance || 100_000_000;
-  const tokensUsed = account?.tokensUsed || 68_450_200;
-  const tokenPercent = Math.min(100, Math.round((tokensUsed / tokenAllowance) * 100));
 
   const handleSendPrompt = (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,7 +88,7 @@ export function AntigravityWorkspace({
       onAddLog({
         instanceId: instance.id,
         level: 'agent',
-        source: instance.model,
+        source: 'agent',
         message: `Plan synthesized for: "${query.substring(0, 45)}..."`,
         details: 'AST dependency tree verified in 14ms',
       });
@@ -128,7 +114,7 @@ export function AntigravityWorkspace({
         instanceId: instance.id,
         level: 'info',
         source: 'runner',
-        message: `[Process ${80000 + instance.port}] Command completed (exit 0).`,
+        message: `[Process] Command completed (exit 0).`,
       });
     }, 250);
   };
@@ -202,23 +188,11 @@ export function AntigravityWorkspace({
             <span>{formatSecondsToTime(instance.totalElapsedSeconds)}</span>
           </div>
 
-          {instance.ttlMinutes > 0 && (
-            <div className="hidden sm:flex items-center gap-1 text-[11px] font-mono text-[#7D818C]">
-              <span>TTL: {formatSecondsToTime(ttlRemainingSeconds)}</span>
-              <button
-                onClick={() => onExtendTtl(instance.id, 30)}
-                className="text-zinc-300 hover:text-white hover:underline cursor-pointer"
-                title="Extend session by +30m"
-              >
-                +30m
-              </button>
-            </div>
-          )}
         </div>
 
         {/* Right: Actions */}
         <div className="flex items-center gap-2">
-          {/* Toggle Account Quota Bar */}
+          {/* Toggle Profile Info Strip */}
           <button
             onClick={() => setShowTelemetryBar(!showTelemetryBar)}
             className={`flex items-center gap-1.5 px-2.5 py-1 text-xs rounded border transition cursor-pointer font-mono ${
@@ -226,11 +200,10 @@ export function AntigravityWorkspace({
                 ? 'bg-[#1C1D23] text-zinc-200 border-[#2C2E38]'
                 : 'text-[#7D818C] hover:text-zinc-200 border-transparent hover:bg-[#1C1D23]'
             }`}
-            title="Toggle Account Quota & Limits"
+            title="Toggle Profile & Workspace Details"
           >
             <ShieldCheck className="w-3.5 h-3.5 text-[#7D818C]" />
-            <span>Telemetry</span>
-            <span className="text-zinc-400">({tokenPercent}%)</span>
+            <span>Profile Details</span>
             {showTelemetryBar ? <ChevronUp className="w-3 h-3 text-[#7D818C]" /> : <ChevronDown className="w-3 h-3 text-[#7D818C]" />}
           </button>
 
@@ -257,7 +230,7 @@ export function AntigravityWorkspace({
           <button
             onClick={() => downloadFile(`launch-${instance.name}.bat`, generateWindowsBatch(instance, account))}
             className="hidden md:flex items-center gap-1.5 px-2 py-1 text-xs text-[#8B8F9A] hover:text-zinc-200 hover:bg-[#1E2026] rounded border border-[#272932] transition cursor-pointer font-mono"
-            title="Download Windows / Linux Desktop Shortcut"
+            title="Download Windows Desktop .bat Shortcut"
           >
             <Download className="w-3 h-3" />
             Shortcut
@@ -282,68 +255,40 @@ export function AntigravityWorkspace({
           <button
             onClick={() => onOpenSettings(instance)}
             className="p-1 text-[#7D818C] hover:text-zinc-200 hover:bg-[#1E2026] rounded transition cursor-pointer"
-            title="Session Settings"
+            title="Profile Settings"
           >
             <Settings className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
-      {/* Account & Quota Telemetry Strip */}
+      {/* Real Profile & Workspace Details Strip */}
       {showTelemetryBar && (
         <div className="bg-[#121316] border-b border-[#212328] px-4 py-2 flex flex-wrap items-center justify-between gap-4 text-xs select-none">
-          {/* Account name & tier */}
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 text-zinc-300 font-medium">
-              <ShieldCheck className="w-3.5 h-3.5 text-[#7D818C]" />
-              <span>{account?.name || 'Production Cloud Platform'}</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#1A1B20] text-zinc-300 border border-[#272932]">
-                {account?.tier || 'Enterprise'}
-              </span>
-            </div>
-            <span className="text-[#3D4048]">·</span>
-            <span className="text-[11px] text-[#7D818C] font-mono">
-              Key: {account?.apiKeyMasked || 'ag_live_••••'}
+          {/* Account Identity */}
+          <div className="flex items-center gap-2 text-zinc-300">
+            <ShieldCheck className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+            <span className="font-medium">{account?.name || 'Standard Profile'}</span>
+            {account?.email && (
+              <span className="text-[11px] text-[#7D818C] font-mono">({account.email})</span>
+            )}
+            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#1A1B20] text-zinc-300 border border-[#272932]">
+              {account?.tier || 'Pro'}
             </span>
           </div>
 
-          {/* Telemetry Gauges */}
-          <div className="flex flex-wrap items-center gap-5 text-[11px] font-mono">
-            {/* Tokens consumed & progress */}
-            <div className="flex items-center gap-2">
-              <span className="text-[#7D818C]">Monthly Tokens:</span>
-              <span className="text-zinc-200">
-                {formatCompactNumber(tokensUsed)} / {formatCompactNumber(tokenAllowance)}
-              </span>
-              <div className="w-16 h-1 bg-[#24262E] rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-zinc-300"
-                  style={{ width: `${tokenPercent}%` }}
-                />
-              </div>
-              <span className="text-zinc-400">{tokenPercent}%</span>
-            </div>
-
-            {/* RPM rate limit */}
+          {/* Real Workspace & Profile details */}
+          <div className="flex flex-wrap items-center gap-4 text-[11px] font-mono">
             <div className="flex items-center gap-1.5 text-[#7D818C]">
-              <span>RPM:</span>
-              <span className="text-zinc-200">
-                {account?.currentRpm || 112} / {account?.rpmLimit || 300}
+              <span>Workspace:</span>
+              <span className="text-zinc-200 truncate max-w-xs" title={instance.workspacePath}>
+                {instance.workspacePath || 'Default (%USERPROFILE%\\AntigravityProfiles)'}
               </span>
             </div>
 
-            {/* Daily spend & cap */}
             <div className="flex items-center gap-1.5 text-[#7D818C]">
-              <span>Daily Spend:</span>
-              <span className="text-zinc-200">
-                {formatCurrency(account?.spentTodayUsd || 84.20)} / {formatCurrency(account?.dailyBudgetUsd || 250)}
-              </span>
-            </div>
-
-            {/* Rollover timer */}
-            <div className="flex items-center gap-1.5 text-[#7D818C]">
-              <span>Resets:</span>
-              <span className="text-zinc-300">{formatTimeLeft(account?.quotaResetDate || new Date().toISOString())}</span>
+              <span>Sandbox:</span>
+              <span className="text-zinc-300">Isolated (`mklink /J` Exts)</span>
             </div>
           </div>
 
@@ -502,38 +447,10 @@ export function AntigravityWorkspace({
                     <Plus className="w-3.5 h-3.5" />
                   </button>
 
-                  {/* Model Selector pill */}
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setShowModelPicker(!showModelPicker)}
-                      className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#20222A] hover:bg-[#272933] text-zinc-300 text-[11px] font-sans border border-[#2A2C36] cursor-pointer"
-                    >
-                      <Sparkles className="w-3 h-3 text-zinc-400" />
-                      <span>{instance.model}</span>
-                      <span className="text-[#6B7280]">▾</span>
-                    </button>
-
-                    {showModelPicker && (
-                      <div className="absolute left-0 bottom-full mb-1 w-52 bg-[#17181D] border border-[#2A2C35] rounded-lg shadow-xl p-1 z-30 text-xs">
-                        {['Gemini 3.8 Flash High', 'Gemini 3.1 Pro', 'Gemini 2.5 Pro Agent', 'Antigravity Deep Agent v3'].map((m) => (
-                          <button
-                            key={m}
-                            type="button"
-                            onClick={() => {
-                              onChangeModel(instance.id, m);
-                              setShowModelPicker(false);
-                            }}
-                            className={`w-full text-left px-2 py-1.5 rounded flex items-center justify-between text-xs cursor-pointer ${
-                              instance.model === m ? 'bg-[#23252E] text-white font-medium' : 'text-zinc-400 hover:bg-[#1E2027]'
-                            }`}
-                          >
-                            <span>{m}</span>
-                            {instance.model === m && <Check className="w-3 h-3 text-white" />}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                  {/* Instance Status pill */}
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#20222A] text-zinc-300 text-[11px] font-mono border border-[#2A2C36]">
+                    <span className={`w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]' : 'bg-zinc-500'}`} />
+                    <span>{isRunning ? 'Instance Active' : 'Instance Stopped'}</span>
                   </div>
                 </div>
 
@@ -602,7 +519,7 @@ export function AntigravityWorkspace({
             </div>
 
             <div className="flex items-center gap-2 text-[#6B7280]">
-              <span className="font-mono text-[10px]">Port :{instance.port}</span>
+              <span className="font-mono text-[10px]">{isRunning ? '● Running' : '○ Stopped'}</span>
               <button onClick={handleCopyCode} title="Copy code" className="hover:text-zinc-300 cursor-pointer">
                 <Copy className="w-3 h-3" />
               </button>
@@ -652,55 +569,55 @@ export function AntigravityWorkspace({
               </form>
             </div>
           ) : (
-            /* Quota Telemetry Tab for this Instance */
+            /* Profile Details Tab for this Instance */
             <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-[#0E0F12] text-xs font-mono">
               <div className="border border-[#22242B] rounded-xl p-4 bg-[#141519]">
                 <h4 className="text-sm font-semibold text-zinc-100 mb-1 flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-[#7D818C]" />
-                  {account?.name}
+                  {account?.name || 'Standard Account'}
                 </h4>
                 <p className="text-[11px] text-[#7D818C] font-sans">
-                  Account email: {account?.email} · Tier: {account?.tier}
+                  Account email: {account?.email || 'local'} · Tier: {account?.tier || 'Pro'}
                 </p>
 
                 <div className="grid grid-cols-2 gap-3 mt-4">
                   <div className="bg-[#18191E] p-3 rounded-lg border border-[#24262E]">
-                    <span className="text-[10px] text-[#6B7280] block">INSTANCE USAGE</span>
+                    <span className="text-[10px] text-[#6B7280] block">SESSION DURATION</span>
                     <span className="text-sm font-bold text-zinc-100">
-                      {formatCompactNumber(instance.tokensConsumedSession)} tokens
+                      {formatSecondsToTime(instance.totalElapsedSeconds)}
                     </span>
                     <span className="text-[10px] text-[#7D818C] mt-0.5 block font-sans">
-                      {instance.requestsMadeSession} requests this session
+                      Active session uptime
                     </span>
                   </div>
 
                   <div className="bg-[#18191E] p-3 rounded-lg border border-[#24262E]">
-                    <span className="text-[10px] text-[#6B7280] block">ACCOUNT REMAINING</span>
-                    <span className="text-sm font-bold text-zinc-100">
-                      {formatCompactNumber(Math.max(0, tokenAllowance - tokensUsed))} tokens
+                    <span className="text-[10px] text-[#6B7280] block">ISOLATION STATUS</span>
+                    <span className="text-sm font-bold text-emerald-400">
+                      Isolated
                     </span>
                     <span className="text-[10px] text-[#7D818C] mt-0.5 block font-sans">
-                      Cap: {formatCompactNumber(tokenAllowance)} ({tokenPercent}% used)
+                      NTFS Junctions enabled
                     </span>
                   </div>
                 </div>
 
                 <div className="space-y-2 mt-4 pt-3 border-t border-[#1F2026] text-xs">
                   <div className="flex justify-between text-[#7D818C]">
-                    <span>RPM Capacity:</span>
-                    <span className="text-zinc-200">{account?.currentRpm} / {account?.rpmLimit} requests/min</span>
+                    <span>Workspace Directory:</span>
+                    <span className="text-zinc-200 truncate max-w-xs">{instance.workspacePath || 'Default (%USERPROFILE%\\AntigravityProfiles)'}</span>
                   </div>
                   <div className="flex justify-between text-[#7D818C]">
-                    <span>Daily Budget:</span>
-                    <span className="text-zinc-200">{formatCurrency(account?.spentTodayUsd || 0)} / {formatCurrency(account?.dailyBudgetUsd || 0)}</span>
+                    <span>Profile Data:</span>
+                    <span className="text-zinc-200 truncate max-w-xs">{instance.profileDir || `%USERPROFILE%\\AntigravityProfiles\\${instance.name}`}</span>
                   </div>
                   <div className="flex justify-between text-[#7D818C]">
-                    <span>Quota Cycle Reset:</span>
-                    <span className="text-zinc-300">{formatTimeLeft(account?.quotaResetDate || '')}</span>
+                    <span>Custom Launch Flags:</span>
+                    <span className="text-zinc-300 font-mono">{instance.customFlags || 'None'}</span>
                   </div>
                   <div className="flex justify-between text-[#7D818C]">
-                    <span>Session TTL Limit:</span>
-                    <span className="text-zinc-200">{instance.ttlMinutes > 0 ? `${instance.ttlMinutes} minutes` : 'Unlimited'}</span>
+                    <span>Custom Environment:</span>
+                    <span className="text-zinc-300">{Object.keys(instance.envVars || {}).length} variables configured</span>
                   </div>
                 </div>
               </div>
@@ -729,7 +646,7 @@ export function AntigravityWorkspace({
                   </button>
 
                   <button
-                    onClick={() => downloadFile(`launch-${instance.name}.sh`, generateBashScript(instance, account))}
+                    onClick={() => downloadFile(`launch-${instance.name}.sh`, generateBashScript(instance))}
                     className="p-2.5 bg-[#18191E] hover:bg-[#20222A] border border-[#24262E] rounded-lg text-left text-xs transition cursor-pointer"
                   >
                     <div className="font-semibold text-zinc-200">.sh Script</div>
@@ -751,12 +668,13 @@ export function AntigravityWorkspace({
           {/* Bottom Telemetry Bar */}
           <div className="h-7 bg-[#121316] border-t border-[#212328] px-3 flex items-center justify-between text-[10px] font-mono text-[#7D818C] select-none shrink-0">
             <div className="flex items-center gap-4">
-              <span>RAM: {Math.round(instance.ramUsageMb)}MB / {instance.ramAllocationMb}MB</span>
-              <span>CPU: {instance.cpuUsagePercent}%</span>
-              <span>TOKENS: {formatCompactNumber(instance.tokensConsumedSession)}</span>
+              <span>Duration: {formatSecondsToTime(instance.totalElapsedSeconds)}</span>
+              <span className="truncate max-w-xs">Workspace: {instance.workspacePath || 'Default'}</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-emerald-500">● Live Daemon</span>
+              <span className={isRunning ? "text-emerald-500" : "text-zinc-500"}>
+                ● {isRunning ? 'Live Instance' : 'Stopped'}
+              </span>
               <span className="text-[#3D4048]">|</span>
               <span>UTF-8</span>
               <span>TypeScript JSX</span>

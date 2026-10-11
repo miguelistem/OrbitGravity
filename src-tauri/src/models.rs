@@ -47,10 +47,14 @@ pub struct Instance {
     #[serde(alias = "profileDir")]
     pub profile_dir: String,
     pub pid: Option<u32>,
-    #[serde(alias = "lastUsed")]
+    #[serde(default, alias = "lastUsed")]
     pub last_used: String,
     #[serde(default, alias = "binaryPath")]
     pub binary_path: Option<String>,
+    #[serde(default, alias = "customFlags")]
+    pub custom_flags: Option<String>,
+    #[serde(default, alias = "envVars")]
+    pub env_vars: Option<std::collections::HashMap<String, String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -89,4 +93,8 @@ pub struct CreateInstanceInput {
     pub workspace_path: Option<String>,
     #[serde(default, alias = "binaryPath")]
     pub binary_path: Option<String>,
+    #[serde(default, alias = "customFlags")]
+    pub custom_flags: Option<String>,
+    #[serde(default, alias = "envVars")]
+    pub env_vars: Option<std::collections::HashMap<String, String>>,
 }
