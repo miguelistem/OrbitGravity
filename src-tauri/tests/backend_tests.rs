@@ -202,3 +202,19 @@ fn test_instance_desktop_shortcut_with_bat() {
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }
+
+#[test]
+fn test_profile_cleanup_on_delete() {
+    let temp_profile = std::env::temp_dir().join(format!("bm_test_del_prof_{}", uuid::Uuid::new_v4()));
+    let setup_res = setup_profile_directories(&temp_profile, "auth-only");
+    assert!(setup_res.is_ok(), "Setup profile directories should succeed");
+    assert!(temp_profile.exists(), "Profile directory should exist before delete");
+
+    // Mimic delete_instance cleanup
+    let ext_link = temp_profile.join("extensions");
+    let _ = remove_junction(&ext_link);
+    assert!(!ext_link.exists(), "Extension junction should be unlinked");
+
+    let _ = std::fs::remove_dir_all(&temp_profile);
+    assert!(!temp_profile.exists(), "Profile directory must be completely removed from disk");
+}

@@ -6,7 +6,7 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { isTauri } from './api';
-import { AntigravityInstance, AntigravityAccount, LogEntry, InstanceStatus } from './types/antigravity';
+import { AntigravityInstance, AntigravityAccount, LogEntry, InstanceStatus, AntigravityAppType } from './types/antigravity';
 import { INITIAL_ACCOUNTS, INITIAL_INSTANCES, INITIAL_LOGS } from './mock/initialData';
 import { formatCompactNumber } from './utils/formatters';
 import { OrbitGravityLogo } from './components/OrbitGravityLogo';
@@ -133,6 +133,17 @@ export default function App() {
   // Initial synchronization with native Tauri backend
   useEffect(() => {
     if (isTauri()) {
+      invoke<any>('get_system_info')
+        .then((sysInfo) => {
+          if (sysInfo?.profiles_dir) {
+            const currentPref = localStorage.getItem('orbitgravity_preferred_profiles_base');
+            if (!currentPref) {
+              localStorage.setItem('orbitgravity_preferred_profiles_base', sysInfo.profiles_dir);
+            }
+          }
+        })
+        .catch(() => {});
+
       invoke<any[]>('list_instances')
         .then((rustInstances) => {
           if (rustInstances && rustInstances.length > 0) {
@@ -249,6 +260,28 @@ export default function App() {
 
   const handleSaveInstance = async (data: Partial<AntigravityInstance>) => {
     if (editingInstance) {
+      if (isTauri()) {
+        try {
+          await invoke('update_instance', {
+            id: editingInstance.id,
+            name: data.name,
+            accountId: data.accountId,
+            mode: data.displayMode,
+            workspacePath: data.workspacePath,
+            customFlags: data.customFlags,
+            envVars: data.envVars,
+            appType: data.appType,
+          });
+          handleAddLog({
+            instanceId: editingInstance.id,
+            level: 'info',
+            source: 'system',
+            message: `Updated instance configuration (${data.appType || editingInstance.appType}).`,
+          });
+        } catch (err: any) {
+          console.error('Failed to update native instance profile:', err);
+        }
+      }
       setInstances((prev) =>
         prev.map((inst) => (inst.id === editingInstance.id ? { ...inst, ...data } : inst))
       );
@@ -257,10 +290,21 @@ export default function App() {
       const cleanName = (data.name || 'Instance').replace(/[^a-zA-Z0-9_-]/g, '') || 'Instance';
       let profileDir = `%USERPROFILE%\\AntigravityProfiles\\${cleanName}`;
       let resolvedWorkspace = data.workspacePath?.trim() || profileDir;
+      let rustInst: any = null;
 
       if (isTauri()) {
         try {
-          const rustInst = await invoke<any>('create_instance', {
+          rustInst = await invoke<any>('create_instance', {
+            payload: {
+              name: data.name || 'New Service Instance',
+              accountId: data.accountId || accounts[0]?.id,
+              mode: 'auth-only',
+              workspacePath: data.workspacePath,
+              customFlags: data.customFlags,
+              envVars: data.envVars,
+              appType: data.appType || 'antigravity_ide',
+              createShortcut: data.createShortcut ?? true,
+            },
             name: data.name || 'New Service Instance',
             accountId: data.accountId || accounts[0]?.id,
             mode: 'auth-only',
@@ -299,7 +343,7 @@ export default function App() {
         icon: data.icon || 'terminal',
         status: 'stopped',
         accountId: data.accountId || accounts[0]?.id || 'acc-enterprise',
-        appType: data.appType || 'antigravity_ide',
+        appType: (rustInst?.app_type || rustInst?.appType || data.appType || 'antigravity_ide') as AntigravityAppType,
         workspacePath: resolvedWorkspace,
         profileDir,
         displayMode: data.displayMode || 'desktop-gui',

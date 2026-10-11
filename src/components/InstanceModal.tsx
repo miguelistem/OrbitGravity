@@ -23,6 +23,24 @@ export function InstanceModal({
 }: InstanceModalProps) {
   const isEditing = !!initialInstance;
 
+  const STORAGE_PREFERRED_BASE = 'orbitgravity_preferred_profiles_base';
+
+  const getPreferredBaseProfilesDir = (): string => {
+    try {
+      const saved = localStorage.getItem(STORAGE_PREFERRED_BASE);
+      if (saved && saved.trim()) return saved.trim();
+    } catch {}
+    return '%USERPROFILE%\\AntigravityProfiles';
+  };
+
+  const setPreferredBaseProfilesDir = (dir: string) => {
+    try {
+      if (dir && dir.trim()) {
+        localStorage.setItem(STORAGE_PREFERRED_BASE, dir.trim());
+      }
+    } catch {}
+  };
+
   // Form states
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -32,6 +50,8 @@ export function InstanceModal({
   const [accountId, setAccountId] = useState('');
   const [appType, setAppType] = useState<AntigravityAppType>('antigravity_ide');
   const [workspacePath, setWorkspacePath] = useState('');
+  const [baseDir, setBaseDir] = useState<string>(() => getPreferredBaseProfilesDir());
+  const [isPathManuallyEdited, setIsPathManuallyEdited] = useState(false);
   const [createShortcut, setCreateShortcut] = useState(true);
   const [displayMode, setDisplayMode] = useState<DisplayMode>('desktop-gui');
   const [customFlags, setCustomFlags] = useState('');
@@ -45,6 +65,9 @@ export function InstanceModal({
 
   useEffect(() => {
     setShowConfirmDelete(false);
+    const preferredBase = getPreferredBaseProfilesDir();
+    setBaseDir(preferredBase);
+
     if (initialInstance) {
       setName(initialInstance.name);
       setDescription(initialInstance.description || '');
@@ -53,7 +76,8 @@ export function InstanceModal({
       setIcon(initialInstance.icon || 'terminal');
       setAccountId(initialInstance.accountId || (accounts[0]?.id || ''));
       setAppType(initialInstance.appType || 'antigravity_ide');
-      setWorkspacePath(initialInstance.workspacePath || '');
+      setWorkspacePath(initialInstance.workspacePath || initialInstance.profileDir || '');
+      setIsPathManuallyEdited(true);
       setDisplayMode(initialInstance.displayMode || 'desktop-gui');
       setCustomFlags(initialInstance.customFlags || '');
       setCreateShortcut(false); // Don't re-create automatically when editing unless chosen
@@ -61,14 +85,17 @@ export function InstanceModal({
       const vars = Object.entries(initialInstance.envVars || {}).map(([k, v]) => ({ key: k, value: v }));
       setEnvVars(vars.length > 0 ? vars : [{ key: 'NODE_ENV', value: 'development' }]);
     } else {
-      setName('New Instance Profile');
+      const defaultName = 'New Instance Profile';
+      const clean = defaultName.replace(/[^a-zA-Z0-9_-]/g, '') || 'Instance';
+      setName(defaultName);
       setDescription('Managed Antigravity profile session.');
       setTag('Projects');
       setColor('neutral');
       setIcon('terminal');
       setAccountId(accounts[0]?.id || '');
       setAppType('antigravity_ide');
-      setWorkspacePath('');
+      setWorkspacePath(`${preferredBase}\\${clean}`);
+      setIsPathManuallyEdited(false);
       setCreateShortcut(true);
       setDisplayMode('desktop-gui');
       setCustomFlags('--enable-anti-entropy');
@@ -81,22 +108,52 @@ export function InstanceModal({
   if (!isOpen) return null;
 
   const cleanFolderPreview = name.trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'Instance';
-  const defaultWorkspacePreview = `%USERPROFILE%\\AntigravityProfiles\\${cleanFolderPreview}`;
+  const defaultWorkspacePreview = `${baseDir}\\${cleanFolderPreview}`;
+
+  const handleNameChange = (newName: string) => {
+    setName(newName);
+    if (!isPathManuallyEdited && !initialInstance) {
+      const clean = newName.trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'Instance';
+      setWorkspacePath(`${baseDir}\\${clean}`);
+    }
+  };
+
+  const handleWorkspacePathChange = (newVal: string) => {
+    setWorkspacePath(newVal);
+    setIsPathManuallyEdited(true);
+  };
 
   const handleBrowseWorkspace = async () => {
     if (isTauri()) {
       try {
         const selected = await invoke<string | null>('pick_folder');
         if (selected) {
-          setWorkspacePath(selected);
+          const clean = name.trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'Instance';
+          const normalized = selected.replace(/\\/g, '/');
+          const lastSegment = normalized.split('/').filter(Boolean).pop() || '';
+
+          let targetPath = selected;
+          let extractedBase = selected;
+          if (lastSegment.toLowerCase() === clean.toLowerCase()) {
+            extractedBase = selected.substring(0, selected.lastIndexOf('\\')) || selected;
+          } else {
+            targetPath = `${selected}\\${clean}`;
+            extractedBase = selected;
+          }
+
+          setBaseDir(extractedBase);
+          setPreferredBaseProfilesDir(extractedBase);
+          setWorkspacePath(targetPath);
+          setIsPathManuallyEdited(true);
         }
       } catch (err) {
         console.error('Failed to open native folder picker:', err);
       }
     } else {
-      const manual = window.prompt('Enter workspace directory path:', workspacePath || defaultWorkspacePreview);
+      const manual = window.prompt('Enter workspace profile directory path:', workspacePath || defaultWorkspacePreview);
       if (manual !== null) {
         setWorkspacePath(manual);
+        setIsPathManuallyEdited(true);
       }
     }
   };
@@ -124,6 +181,15 @@ export function InstanceModal({
       }
     });
 
+    const trimmedPath = workspacePath.trim();
+    if (trimmedPath) {
+      const lastSlash = trimmedPath.lastIndexOf('\\');
+      if (lastSlash > 0) {
+        const extracted = trimmedPath.substring(0, lastSlash);
+        setPreferredBaseProfilesDir(extracted);
+      }
+    }
+
     onSave({
       name: name.trim() || 'Antigravity Session',
       description,
@@ -132,7 +198,7 @@ export function InstanceModal({
       icon,
       accountId: accountId || accounts[0]?.id,
       appType,
-      workspacePath: workspacePath.trim(), // Backend will default to profile folder if empty and create it
+      workspacePath: trimmedPath,
       displayMode,
       customFlags,
       envVars: envObj,
@@ -202,7 +268,7 @@ export function InstanceModal({
                     type="text"
                     required
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => handleNameChange(e.target.value)}
                     placeholder="e.g. Portfolio Ideas"
                     className="w-full bg-[#0F1012] border border-[#23252C] rounded-md px-3 py-1.5 text-zinc-200 focus:outline-none focus:border-zinc-500 font-mono text-xs"
                   />
@@ -280,7 +346,7 @@ export function InstanceModal({
                     <input
                       type="text"
                       value={workspacePath}
-                      onChange={(e) => setWorkspacePath(e.target.value)}
+                      onChange={(e) => handleWorkspacePathChange(e.target.value)}
                       placeholder={defaultWorkspacePreview}
                       className="w-full bg-[#0F1012] border border-[#23252C] rounded-md pl-3 pr-24 py-1.5 text-zinc-200 focus:outline-none focus:border-zinc-500 font-mono text-xs placeholder-[#4B4E58]"
                     />
@@ -296,14 +362,14 @@ export function InstanceModal({
                   </div>
 
                   <p className="text-[10.5px] text-[#6B7280] mt-1.5 leading-relaxed">
-                    If left blank, OrbitGravity automatically creates and defaults to <code className="text-zinc-400 font-mono">{defaultWorkspacePreview}</code>.
+                    Default profile base: <code className="text-zinc-400 font-mono">{baseDir}</code>. Custom folders are remembered automatically.
                   </p>
 
                   {/* Profile storage directory explanation */}
                   <div className="mt-2.5 p-2.5 rounded-md bg-[#0F1012] border border-[#212328] space-y-1">
                     <div className="flex items-center gap-1.5 text-[11px] text-zinc-400 font-mono">
                       <span className="text-[#7D818C]">Isolated Profile Location:</span>
-                      <span className="text-zinc-200 font-medium">%USERPROFILE%\AntigravityProfiles\{cleanFolderPreview}</span>
+                      <span className="text-zinc-200 font-medium truncate">{workspacePath || defaultWorkspacePreview}</span>
                     </div>
                     <p className="text-[10.5px] text-[#6B7280]">
                       This isolated sandbox holds your instance's data, NTFS junction extensions, and custom state without admin rights.

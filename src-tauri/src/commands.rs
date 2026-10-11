@@ -140,22 +140,41 @@ pub fn create_instance(
     port: Option<u16>,
     workspace_path: Option<String>,
     binary_path: Option<String>,
+    custom_flags: Option<String>,
+    env_vars: Option<std::collections::HashMap<String, String>>,
+    app_type: Option<String>,
+    create_shortcut: Option<bool>,
 ) -> Result<Instance, String> {
-    let mut input = payload.or(instance).unwrap_or(CreateInstanceInput {
-        name: name.unwrap_or_else(|| "New Instance".to_string()),
-        account_id,
-        mode,
+    let mut input = payload.or(instance).unwrap_or_else(|| CreateInstanceInput {
+        name: name.clone().unwrap_or_else(|| "New Instance".to_string()),
+        account_id: account_id.clone(),
+        mode: mode.clone(),
         port,
-        workspace_path,
-        binary_path: None,
-        custom_flags: None,
-        env_vars: None,
-        app_type: None,
-        create_shortcut: None,
+        workspace_path: workspace_path.clone(),
+        binary_path: binary_path.clone(),
+        custom_flags: custom_flags.clone(),
+        env_vars: env_vars.clone(),
+        app_type: app_type.clone(),
+        create_shortcut,
     });
 
     if input.binary_path.is_none() && binary_path.is_some() {
         input.binary_path = binary_path;
+    }
+    if input.custom_flags.is_none() && custom_flags.is_some() {
+        input.custom_flags = custom_flags;
+    }
+    if input.env_vars.is_none() && env_vars.is_some() {
+        input.env_vars = env_vars;
+    }
+    if input.app_type.is_none() && app_type.is_some() {
+        input.app_type = app_type;
+    }
+    if input.create_shortcut.is_none() && create_shortcut.is_some() {
+        input.create_shortcut = create_shortcut;
+    }
+    if input.workspace_path.is_none() && workspace_path.is_some() {
+        input.workspace_path = workspace_path;
     }
 
     if input.name.trim().is_empty() {
@@ -179,8 +198,15 @@ pub fn create_instance(
         clean_folder_name
     };
 
-    let base_profiles = get_base_profiles_dir();
-    let profile_path = base_profiles.join(&folder_name);
+    // If user provided a specific workspace/profile directory, use it directly as the profile folder;
+    // otherwise default to %USERPROFILE%\AntigravityProfiles\<folder_name>
+    let profile_path = match input.workspace_path.as_deref().filter(|s| !s.trim().is_empty()) {
+        Some(ws) => PathBuf::from(ws.trim()),
+        None => {
+            let base_profiles = get_base_profiles_dir();
+            base_profiles.join(&folder_name)
+        }
+    };
     let profile_dir_str = profile_path.to_string_lossy().to_string();
 
     // Assign port
@@ -192,12 +218,8 @@ pub fn create_instance(
     // Setup profile directory and junctions
     setup_profile_directories(&profile_path, &instance_mode)?;
 
-    // If workspace_path is not defined, default to the isolated profile directory and ensure it exists
-    let resolved_ws = match input.workspace_path.filter(|s| !s.trim().is_empty()) {
-        Some(ws) => ws,
-        None => profile_dir_str.clone(),
-    };
-    let _ = std::fs::create_dir_all(&resolved_ws);
+    let resolved_ws = profile_dir_str.clone();
+    let _ = std::fs::create_dir_all(&profile_path);
 
     let app_type = input.app_type.unwrap_or_else(|| "antigravity_ide".to_string());
 
@@ -239,6 +261,62 @@ pub fn create_instance(
 }
 
 #[tauri::command]
+pub fn update_instance(
+    state: State<'_, AppState>,
+    id: String,
+    name: Option<String>,
+    account_id: Option<String>,
+    mode: Option<String>,
+    workspace_path: Option<String>,
+    custom_flags: Option<String>,
+    env_vars: Option<std::collections::HashMap<String, String>>,
+    app_type: Option<String>,
+) -> Result<Instance, String> {
+    let mut fleet = state.fleet.lock().map_err(|e| e.to_string())?;
+    let instance = fleet.instances.iter_mut().find(|i| i.id == id)
+        .ok_or_else(|| format!("Instance with id '{}' not found", id))?;
+
+    if let Some(n) = name {
+        if !n.trim().is_empty() {
+            instance.name = n;
+        }
+    }
+    if let Some(acc) = account_id {
+        instance.account_id = acc;
+    }
+    if let Some(m) = mode {
+        instance.mode = m;
+    }
+    if let Some(ws) = workspace_path {
+        instance.workspace_path = Some(ws);
+    }
+    if let Some(flags) = custom_flags {
+        instance.custom_flags = Some(flags);
+    }
+    if let Some(envs) = env_vars {
+        instance.env_vars = Some(envs);
+    }
+    if let Some(at) = app_type {
+        instance.app_type = Some(at);
+    }
+
+    // Refresh launch.bat if profile dir exists
+    let target_bin = match &instance.binary_path {
+        Some(custom) if Path::new(custom).exists() => PathBuf::from(custom),
+        _ => {
+            let a_type = instance.app_type.as_deref().unwrap_or("antigravity_ide");
+            detect_binary_for_app_type(a_type).unwrap_or_else(|| PathBuf::from("antigravity.exe"))
+        }
+    };
+    let _ = create_instance_desktop_shortcut(instance, &target_bin, None);
+
+    let updated = instance.clone();
+    sync_account_stats(&mut fleet);
+    save_fleet_state(&fleet)?;
+    Ok(updated)
+}
+
+#[tauri::command]
 pub fn launch_instance(state: State<'_, AppState>, id: String) -> Result<Instance, String> {
     let mut fleet = state.fleet.lock().map_err(|e| e.to_string())?;
     let instance = fleet.instances.iter_mut().find(|i| i.id == id)
@@ -276,14 +354,24 @@ pub fn delete_instance(state: State<'_, AppState>, id: String) -> Result<bool, S
         let mut inst = fleet.instances.remove(pos);
         let _ = stop_antigravity_instance(&mut inst);
 
-        // Safely unlink junction
+        // 1. Safely unlink NTFS junction first
         let ext_link = Path::new(&inst.profile_dir).join("extensions");
         let _ = remove_junction(&ext_link);
 
-        // Remove desktop shortcut if exists
+        // 2. Remove desktop shortcut if exists
         let shortcut_path = get_shortcut_destination(&inst.name, None);
         if shortcut_path.exists() {
             let _ = std::fs::remove_file(&shortcut_path);
+        }
+
+        // 3. Delete the profile directory of that instance from the profiles folder
+        let profile_path = Path::new(&inst.profile_dir);
+        if profile_path.exists() {
+            let _ = std::fs::remove_dir_all(profile_path);
+            if profile_path.exists() {
+                std::thread::sleep(std::time::Duration::from_millis(300));
+                let _ = std::fs::remove_dir_all(profile_path);
+            }
         }
 
         sync_account_stats(&mut fleet);

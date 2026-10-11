@@ -35,6 +35,7 @@ pub fn run() {
             commands::reset_account_cycle,
             commands::list_instances,
             commands::create_instance,
+            commands::update_instance,
             commands::launch_instance,
             commands::stop_instance,
             commands::delete_instance,
