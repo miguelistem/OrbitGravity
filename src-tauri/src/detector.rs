@@ -6,6 +6,23 @@ pub fn detect_antigravity_binary() -> Option<PathBuf> {
     detect_all_antigravity_binaries().into_iter().next().map(|b| PathBuf::from(b.path))
 }
 
+/// Detects the binary matching a specific application variant (IDE vs Desktop client).
+pub fn detect_binary_for_app_type(app_type: &str) -> Option<PathBuf> {
+    let binaries = detect_all_antigravity_binaries();
+    let lower_type = app_type.to_lowercase();
+    if lower_type.contains("ide") {
+        if let Some(b) = binaries.iter().find(|b| b.kind == "ide") {
+            return Some(PathBuf::from(&b.path));
+        }
+    } else {
+        if let Some(b) = binaries.iter().find(|b| b.kind == "app") {
+            return Some(PathBuf::from(&b.path));
+        }
+    }
+    // Fallback to first available detected binary
+    binaries.into_iter().next().map(|b| PathBuf::from(b.path))
+}
+
 /// Discovers all installed Antigravity variants (IDE vs Desktop client).
 pub fn detect_all_antigravity_binaries() -> Vec<AntigravityBinaryInfo> {
     let mut found: Vec<AntigravityBinaryInfo> = Vec::new();

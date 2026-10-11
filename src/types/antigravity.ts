@@ -23,6 +23,8 @@ export interface AntigravityAccount {
   apiKeyMasked: string;
 }
 
+export type AntigravityAppType = 'antigravity_ide' | 'antigravity';
+
 export interface AntigravityInstance {
   id: string;
   name: string;
@@ -32,6 +34,8 @@ export interface AntigravityInstance {
   icon: string;
   status: InstanceStatus;
   accountId: string;
+  appType?: AntigravityAppType;
+  createShortcut?: boolean;
   
   // Workspace & Environment Settings
   workspacePath: string;

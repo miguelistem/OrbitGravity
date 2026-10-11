@@ -33,7 +33,8 @@ import {
   ChevronRight,
   ChevronDown,
   ListFilter,
-  PanelLeft
+  PanelLeft,
+  Trash2
 } from 'lucide-react';
 
 export default function App() {
@@ -149,6 +150,7 @@ export default function App() {
                     profileDir: ri.profile_dir || existing.profileDir,
                     customFlags: ri.custom_flags || existing.customFlags,
                     envVars: ri.env_vars || existing.envVars,
+                    appType: ri.app_type || existing.appType || 'antigravity_ide',
                   };
                 }
                 return {
@@ -160,6 +162,7 @@ export default function App() {
                   icon: 'terminal',
                   status: isRunning ? 'running' : 'stopped',
                   accountId: ri.account_id || accounts[0]?.id || 'acc-enterprise',
+                  appType: ri.app_type || 'antigravity_ide',
                   workspacePath: ri.workspace_path || '',
                   profileDir: ri.profile_dir || '',
                   displayMode: 'desktop-gui',
@@ -251,7 +254,9 @@ export default function App() {
       );
     } else {
       let newId = `inst-${Date.now().toString(36)}`;
-      let profileDir = `C:\\Users\\Miguel\\AntigravityProfiles\\${(data.name || 'Instance').replace(/[^a-zA-Z0-9_-]/g, '')}`;
+      const cleanName = (data.name || 'Instance').replace(/[^a-zA-Z0-9_-]/g, '') || 'Instance';
+      let profileDir = `C:\\Users\\Miguel\\AntigravityProfiles\\${cleanName}`;
+      let resolvedWorkspace = data.workspacePath?.trim() || profileDir;
 
       if (isTauri()) {
         try {
@@ -262,12 +267,17 @@ export default function App() {
             workspacePath: data.workspacePath,
             customFlags: data.customFlags,
             envVars: data.envVars,
+            appType: data.appType || 'antigravity_ide',
+            createShortcut: data.createShortcut ?? true,
           });
           if (rustInst?.id) {
             newId = rustInst.id;
           }
           if (rustInst?.profileDir || rustInst?.profile_dir) {
             profileDir = rustInst.profileDir || rustInst.profile_dir;
+          }
+          if (rustInst?.workspacePath || rustInst?.workspace_path) {
+            resolvedWorkspace = rustInst.workspacePath || rustInst.workspace_path;
           }
           handleAddLog({
             instanceId: newId,
@@ -289,7 +299,8 @@ export default function App() {
         icon: data.icon || 'terminal',
         status: 'stopped',
         accountId: data.accountId || accounts[0]?.id || 'acc-enterprise',
-        workspacePath: data.workspacePath || profileDir,
+        appType: data.appType || 'antigravity_ide',
+        workspacePath: resolvedWorkspace,
         profileDir,
         displayMode: data.displayMode || 'desktop-gui',
         envVars: data.envVars || {},
@@ -303,6 +314,31 @@ export default function App() {
       setActiveInstanceId(newId);
       setActiveViewTab('workspace');
     }
+  };
+
+  const handleDeleteInstance = async (id: string) => {
+    if (isTauri()) {
+      try {
+        await invoke('delete_instance', { id });
+      } catch (err) {
+        console.error('Failed to delete instance from Tauri:', err);
+      }
+    }
+
+    setInstances((prev) => {
+      const remaining = prev.filter((i) => i.id !== id);
+      if (activeInstanceId === id) {
+        setActiveInstanceId(remaining[0]?.id || '');
+      }
+      return remaining;
+    });
+
+    handleAddLog({
+      instanceId: id,
+      level: 'info',
+      source: 'system',
+      message: 'Instance profile deleted.',
+    });
   };
 
   const handleSaveAccount = (account: AntigravityAccount) => {
@@ -638,9 +674,30 @@ export default function App() {
                                     </span>
                                   </div>
 
-                                  <span className="text-[12px] font-mono text-[#787D8A] group-hover:text-[#A6ABB8] shrink-0 ml-2">
-                                    {formatInstanceDurationBadge(inst)}
-                                  </span>
+                                  <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                                      inst.appType === 'antigravity'
+                                        ? 'bg-purple-950/40 text-purple-400 border border-purple-800/40'
+                                        : 'bg-blue-950/40 text-blue-400 border border-blue-800/40'
+                                    }`}>
+                                      {inst.appType === 'antigravity' ? 'App' : 'IDE'}
+                                    </span>
+                                    <span className="text-[12px] font-mono text-[#787D8A] group-hover:text-[#A6ABB8]">
+                                      {formatInstanceDurationBadge(inst)}
+                                    </span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (window.confirm(`Delete instance "${inst.name}"?`)) {
+                                          handleDeleteInstance(inst.id);
+                                        }
+                                      }}
+                                      className="opacity-0 group-hover:opacity-100 p-1 hover:text-rose-400 text-zinc-500 rounded transition"
+                                      title="Delete instance"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
                                 </div>
                               );
                             })}
@@ -719,6 +776,7 @@ export default function App() {
               }}
               onAddLog={handleAddLog}
               onLaunchIde={handleLaunchIde}
+              onDeleteInstance={handleDeleteInstance}
             />
           )}
 
@@ -769,6 +827,7 @@ export default function App() {
           setEditingInstance(null);
         }}
         onSave={handleSaveInstance}
+        onDelete={handleDeleteInstance}
         accounts={accounts}
         initialInstance={editingInstance}
       />

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { AntigravityInstance, AntigravityAccount, DisplayMode } from '../types/antigravity';
-import { X, Plus, Trash2, Folder, Sliders } from 'lucide-react';
+import { AntigravityInstance, AntigravityAccount, DisplayMode, AntigravityAppType } from '../types/antigravity';
+import { X, Plus, Trash2, Folder, Code, Terminal, Check, AlertTriangle, Monitor } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { isTauri } from '../api';
 
@@ -8,6 +8,7 @@ interface InstanceModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (instanceData: Partial<AntigravityInstance>) => void;
+  onDelete?: (id: string) => void;
   accounts: AntigravityAccount[];
   initialInstance?: AntigravityInstance | null;
 }
@@ -16,6 +17,7 @@ export function InstanceModal({
   isOpen,
   onClose,
   onSave,
+  onDelete,
   accounts,
   initialInstance,
 }: InstanceModalProps) {
@@ -28,17 +30,21 @@ export function InstanceModal({
   const [color, setColor] = useState('neutral');
   const [icon, setIcon] = useState('terminal');
   const [accountId, setAccountId] = useState('');
+  const [appType, setAppType] = useState<AntigravityAppType>('antigravity_ide');
   const [workspacePath, setWorkspacePath] = useState('');
+  const [createShortcut, setCreateShortcut] = useState(true);
   const [displayMode, setDisplayMode] = useState<DisplayMode>('desktop-gui');
   const [customFlags, setCustomFlags] = useState('');
   const [envVars, setEnvVars] = useState<Array<{ key: string; value: string }>>([
     { key: 'NODE_ENV', value: 'development' },
   ]);
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
 
   // Active tab: 'general' (Workspace) | 'env' (Environment)
   const [activeTab, setActiveTab] = useState<'general' | 'env'>('general');
 
   useEffect(() => {
+    setShowConfirmDelete(false);
     if (initialInstance) {
       setName(initialInstance.name);
       setDescription(initialInstance.description || '');
@@ -46,9 +52,11 @@ export function InstanceModal({
       setColor(initialInstance.color || 'neutral');
       setIcon(initialInstance.icon || 'terminal');
       setAccountId(initialInstance.accountId || (accounts[0]?.id || ''));
+      setAppType(initialInstance.appType || 'antigravity_ide');
       setWorkspacePath(initialInstance.workspacePath || '');
       setDisplayMode(initialInstance.displayMode || 'desktop-gui');
       setCustomFlags(initialInstance.customFlags || '');
+      setCreateShortcut(false); // Don't re-create automatically when editing unless chosen
 
       const vars = Object.entries(initialInstance.envVars || {}).map(([k, v]) => ({ key: k, value: v }));
       setEnvVars(vars.length > 0 ? vars : [{ key: 'NODE_ENV', value: 'development' }]);
@@ -59,7 +67,9 @@ export function InstanceModal({
       setColor('neutral');
       setIcon('terminal');
       setAccountId(accounts[0]?.id || '');
+      setAppType('antigravity_ide');
       setWorkspacePath('');
+      setCreateShortcut(true);
       setDisplayMode('desktop-gui');
       setCustomFlags('--enable-anti-entropy');
       setEnvVars([
@@ -69,6 +79,9 @@ export function InstanceModal({
   }, [initialInstance, accounts, isOpen]);
 
   if (!isOpen) return null;
+
+  const cleanFolderPreview = name.trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'Instance';
+  const defaultWorkspacePreview = `%USERPROFILE%\\AntigravityProfiles\\${cleanFolderPreview}`;
 
   const handleBrowseWorkspace = async () => {
     if (isTauri()) {
@@ -81,8 +94,7 @@ export function InstanceModal({
         console.error('Failed to open native folder picker:', err);
       }
     } else {
-      // In web browser dev fallback, ask via prompt
-      const manual = window.prompt('Enter workspace directory path:', workspacePath || 'C:\\Projects\\MyProject');
+      const manual = window.prompt('Enter workspace directory path:', workspacePath || defaultWorkspacePreview);
       if (manual !== null) {
         setWorkspacePath(manual);
       }
@@ -112,9 +124,6 @@ export function InstanceModal({
       }
     });
 
-    const cleanFolder = name.trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'Instance';
-    const resolvedProfileDir = `C:\\Users\\Miguel\\AntigravityProfiles\\${cleanFolder}`;
-
     onSave({
       name: name.trim() || 'Antigravity Session',
       description,
@@ -122,31 +131,35 @@ export function InstanceModal({
       color,
       icon,
       accountId: accountId || accounts[0]?.id,
-      workspacePath: workspacePath.trim() || resolvedProfileDir,
-      profileDir: resolvedProfileDir,
+      appType,
+      workspacePath: workspacePath.trim(), // Backend will default to profile folder if empty and create it
       displayMode,
       customFlags,
       envVars: envObj,
+      createShortcut,
     });
     onClose();
   };
 
+  const handleDelete = () => {
+    if (initialInstance && onDelete) {
+      onDelete(initialInstance.id);
+      onClose();
+    }
+  };
+
   const iconOptions = ['terminal', 'cpu', 'code', 'database', 'zap', 'server', 'layers'];
-  const profileNamePreview = name.trim().replace(/[^a-zA-Z0-9_-]/g, '') || '<name>';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
       <div className="bg-[#121316] border border-[#23252C] rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden text-zinc-300">
         {/* Header */}
-        <div className="px-5 py-3.5 border-b border-[#212328] flex items-center justify-between bg-[#15161A]">
-          <div>
-            <h2 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
-              <Sliders className="w-4 h-4 text-[#7D818C]" />
-              {isEditing ? `Settings: ${name}` : 'New Instance Profile'}
-            </h2>
-            <p className="text-[11px] text-[#7D818C] mt-0.5">
-              Configure profile workspace directory, bound account identity, and custom environment flags.
-            </p>
+        <div className="px-5 py-3.5 border-b border-[#212328] flex items-center justify-between bg-[#16171B]">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-blue-500" />
+            <h3 className="font-semibold text-sm text-zinc-100">
+              {isEditing ? `Edit Instance: ${initialInstance.name}` : 'Create Isolated Instance Profile'}
+            </h3>
           </div>
           <button
             onClick={onClose}
@@ -180,7 +193,8 @@ export function InstanceModal({
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 space-y-4 text-xs">
           {activeTab === 'general' && (
-            <div className="space-y-3.5">
+            <div className="space-y-4">
+              {/* Name & Category */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
                   <label className="block text-zinc-300 font-medium mb-1">Instance Name</label>
@@ -206,29 +220,59 @@ export function InstanceModal({
                 </div>
               </div>
 
+              {/* App Type Selector */}
               <div>
-                <label className="block text-zinc-300 font-medium mb-1">Bound Account Profile</label>
-                <select
-                  value={accountId}
-                  onChange={(e) => setAccountId(e.target.value)}
-                  className="w-full bg-[#0F1012] border border-[#23252C] rounded-md px-3 py-1.5 text-zinc-200 focus:outline-none focus:border-zinc-500 text-xs font-mono"
-                >
-                  {accounts.map((acc) => (
-                    <option key={acc.id} value={acc.id}>
-                      {acc.name} ({acc.email}) — {acc.tier}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[11px] text-[#7D818C] mt-1">
-                  Associates this isolated profile with a specific Google / Antigravity login identity.
-                </p>
+                <label className="block text-zinc-300 font-medium mb-1.5">App Type</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setAppType('antigravity_ide')}
+                    className={`p-3 rounded-lg border text-left transition cursor-pointer flex flex-col gap-1 ${
+                      appType === 'antigravity_ide'
+                        ? 'bg-[#1C202C] border-blue-500 text-white shadow-xs'
+                        : 'bg-[#141519] border-[#252730] text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-xs flex items-center gap-1.5 text-zinc-100">
+                        <Code className="w-3.5 h-3.5 text-blue-400" />
+                        Antigravity IDE
+                      </span>
+                      {appType === 'antigravity_ide' && <Check className="w-3.5 h-3.5 text-blue-400" />}
+                    </div>
+                    <span className="text-[10.5px] text-[#7D818C] font-mono leading-tight">
+                      VS Code-based IDE variant (Antigravity IDE.exe)
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setAppType('antigravity')}
+                    className={`p-3 rounded-lg border text-left transition cursor-pointer flex flex-col gap-1 ${
+                      appType === 'antigravity'
+                        ? 'bg-[#1C202C] border-emerald-500 text-white shadow-xs'
+                        : 'bg-[#141519] border-[#252730] text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-xs flex items-center gap-1.5 text-zinc-100">
+                        <Terminal className="w-3.5 h-3.5 text-emerald-400" />
+                        Antigravity
+                      </span>
+                      {appType === 'antigravity' && <Check className="w-3.5 h-3.5 text-emerald-400" />}
+                    </div>
+                    <span className="text-[10.5px] text-[#7D818C] font-mono leading-tight">
+                      Standalone desktop app (antigravity.exe)
+                    </span>
+                  </button>
+                </div>
               </div>
 
-              {/* Workspace Directory with Browse Button & Profile Location Display */}
+              {/* Workspace Profile Directory with Browse Button & Auto-Default Display */}
               <div className="pt-2 border-t border-[#212328] space-y-2">
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-zinc-300 font-medium">Workspace Project Directory</label>
+                    <label className="text-zinc-300 font-medium">Workspace Profile Directory</label>
                     <span className="text-[10px] text-[#7D818C]">Folder opened inside Antigravity</span>
                   </div>
                   
@@ -237,8 +281,8 @@ export function InstanceModal({
                       type="text"
                       value={workspacePath}
                       onChange={(e) => setWorkspacePath(e.target.value)}
-                      placeholder={`%USERPROFILE%\\AntigravityProfiles\\${profileNamePreview}`}
-                      className="w-full bg-[#0F1012] border border-[#23252C] rounded-md pl-3 pr-24 py-1.5 text-zinc-200 focus:outline-none focus:border-zinc-500 font-mono text-xs"
+                      placeholder={defaultWorkspacePreview}
+                      className="w-full bg-[#0F1012] border border-[#23252C] rounded-md pl-3 pr-24 py-1.5 text-zinc-200 focus:outline-none focus:border-zinc-500 font-mono text-xs placeholder-[#4B4E58]"
                     />
                     <button
                       type="button"
@@ -251,19 +295,39 @@ export function InstanceModal({
                     </button>
                   </div>
 
+                  <p className="text-[10.5px] text-[#6B7280] mt-1.5 leading-relaxed">
+                    If left blank, OrbitGravity automatically creates and defaults to <code className="text-zinc-400 font-mono">{defaultWorkspacePreview}</code>.
+                  </p>
+
                   {/* Profile storage directory explanation */}
-                  <div className="mt-2 p-2.5 rounded-md bg-[#0F1012] border border-[#212328] space-y-1">
+                  <div className="mt-2.5 p-2.5 rounded-md bg-[#0F1012] border border-[#212328] space-y-1">
                     <div className="flex items-center gap-1.5 text-[11px] text-zinc-400 font-mono">
                       <span className="text-[#7D818C]">Isolated Profile Location:</span>
-                      <span className="text-zinc-200 font-medium">%USERPROFILE%\AntigravityProfiles\{profileNamePreview}</span>
+                      <span className="text-zinc-200 font-medium">%USERPROFILE%\AntigravityProfiles\{cleanFolderPreview}</span>
                     </div>
                     <p className="text-[10.5px] text-[#6B7280]">
-                      This dedicated directory isolates your auth credentials, extensions (via NTFS Junction), and settings from other instances.
+                      This isolated sandbox holds your instance's data, NTFS junction extensions, and custom state without admin rights.
                     </p>
                   </div>
                 </div>
               </div>
 
+              {/* Desktop Shortcut Checkbox Option */}
+              <div className="pt-2 border-t border-[#212328]">
+                <label className="flex items-center gap-2.5 cursor-pointer text-xs text-zinc-200 select-none">
+                  <input
+                    type="checkbox"
+                    checked={createShortcut}
+                    onChange={(e) => setCreateShortcut(e.target.checked)}
+                    className="rounded border-[#2D303B] bg-[#141519] text-blue-500 focus:ring-0 focus:ring-offset-0 cursor-pointer w-4 h-4"
+                  />
+                  <span>
+                    Create Desktop Shortcut (<code className="text-zinc-400 font-mono">{cleanFolderPreview}.lnk</code> with Antigravity icon)
+                  </span>
+                </label>
+              </div>
+
+              {/* Description */}
               <div>
                 <label className="block text-zinc-300 font-medium mb-1">Description (Optional)</label>
                 <textarea
@@ -275,8 +339,9 @@ export function InstanceModal({
                 />
               </div>
 
+              {/* Shortcut Icon */}
               <div>
-                <label className="block text-zinc-300 font-medium mb-1">Shortcut Icon</label>
+                <label className="block text-zinc-300 font-medium mb-1">Instance Glyph Icon</label>
                 <div className="flex items-center gap-1.5">
                   {iconOptions.map((ic) => (
                     <button
@@ -361,20 +426,58 @@ export function InstanceModal({
 
           {/* Modal Footer */}
           <div className="pt-3 border-t border-[#212328] flex items-center justify-between">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3.5 py-1.5 bg-[#17181D] hover:bg-[#202128] text-zinc-300 rounded text-xs font-medium transition cursor-pointer"
-            >
-              Cancel
-            </button>
+            <div>
+              {isEditing && onDelete && (
+                showConfirmDelete ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-rose-400 flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3" />
+                      Delete profile?
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleDelete}
+                      className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded text-xs font-medium cursor-pointer transition"
+                    >
+                      Confirm
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmDelete(false)}
+                      className="px-2 py-1 bg-[#1F2229] hover:bg-[#282B34] text-zinc-300 rounded text-xs cursor-pointer transition"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmDelete(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/60 rounded text-xs font-medium transition cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Instance</span>
+                  </button>
+                )
+              )}
+            </div>
 
-            <button
-              type="submit"
-              className="px-4 py-1.5 bg-[#1A56DB] hover:bg-[#1E62F0] text-white rounded text-xs font-medium transition cursor-pointer"
-            >
-              {isEditing ? 'Save Settings' : 'Create Profile'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3.5 py-1.5 bg-[#17181D] hover:bg-[#202128] text-zinc-300 rounded text-xs font-medium transition cursor-pointer"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="submit"
+                className="px-4 py-1.5 bg-[#1A56DB] hover:bg-[#1E62F0] text-white rounded text-xs font-medium transition cursor-pointer"
+              >
+                {isEditing ? 'Save Settings' : 'Create Profile'}
+              </button>
+            </div>
           </div>
         </form>
       </div>

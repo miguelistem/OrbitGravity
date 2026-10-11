@@ -1,7 +1,7 @@
 use std::path::Path;
 use sysinfo::{ProcessesToUpdate, System, Pid};
 use crate::models::Instance;
-use crate::detector::detect_antigravity_binary;
+use crate::detector::detect_binary_for_app_type;
 use crate::junction::setup_profile_directories;
 
 /// Refreshes the running status and PIDs of all instances.
@@ -58,8 +58,11 @@ pub fn refresh_instances_status(instances: &mut [Instance]) {
 pub fn launch_antigravity_instance(instance: &mut Instance) -> Result<(), String> {
     let binary_path = match &instance.binary_path {
         Some(custom) if Path::new(custom).exists() => std::path::PathBuf::from(custom),
-        _ => detect_antigravity_binary()
-            .ok_or_else(|| "Antigravity binary not found on the system. Please ensure Antigravity IDE or Antigravity is installed.".to_string())?,
+        _ => {
+            let app_type = instance.app_type.as_deref().unwrap_or("antigravity_ide");
+            detect_binary_for_app_type(app_type)
+                .ok_or_else(|| "Antigravity binary not found on the system. Please ensure Antigravity IDE or Antigravity is installed.".to_string())?
+        }
     };
 
     let profile_path = Path::new(&instance.profile_dir);

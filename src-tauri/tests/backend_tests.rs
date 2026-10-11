@@ -1,8 +1,9 @@
-use app_lib::detector::{check_junction_support, detect_antigravity_binary, detect_all_antigravity_binaries, get_base_profiles_dir, get_system_extensions_dir};
+use app_lib::detector::{check_junction_support, detect_antigravity_binary, detect_all_antigravity_binaries, detect_binary_for_app_type, get_base_profiles_dir, get_system_extensions_dir};
 use app_lib::junction::{create_junction, remove_junction, setup_profile_directories};
-use app_lib::shortcut::create_windows_shortcut;
+use app_lib::shortcut::{create_windows_shortcut, create_instance_desktop_shortcut};
 use app_lib::storage::{get_seed_data, sync_account_stats};
 use app_lib::telemetry::calculate_storage_saved_mb;
+use app_lib::models::Instance;
 
 #[test]
 fn test_antigravity_binary_detection() {
@@ -134,6 +135,69 @@ fn test_shortcut_creation() {
 
         assert!(res.is_ok(), "Shortcut creation should succeed: {:?}", res);
         assert!(sc_path.exists(), "Shortcut file .lnk must exist");
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+}
+
+#[test]
+fn test_detect_binary_for_app_type() {
+    let ide_bin = detect_binary_for_app_type("antigravity_ide");
+    let app_bin = detect_binary_for_app_type("antigravity");
+
+    println!("Detected IDE bin: {:?}", ide_bin);
+    println!("Detected standalone app bin: {:?}", app_bin);
+
+    assert!(ide_bin.is_some(), "Should find IDE binary on this system");
+    assert!(app_bin.is_some(), "Should find App binary on this system");
+
+    let ide_str = ide_bin.unwrap().to_string_lossy().to_lowercase();
+    let app_str = app_bin.unwrap().to_string_lossy().to_lowercase();
+
+    assert!(ide_str.contains("ide"), "IDE binary path should contain 'ide'");
+    assert!(app_str.contains("antigravity"), "App binary path should contain 'antigravity'");
+}
+
+#[test]
+fn test_instance_desktop_shortcut_with_bat() {
+    let ide_bin = detect_binary_for_app_type("antigravity_ide");
+    if let Some(binary) = ide_bin {
+        let temp_dir = std::env::temp_dir().join(format!("bm_test_inst_sc_{}", uuid::Uuid::new_v4()));
+        let _ = std::fs::create_dir_all(&temp_dir);
+
+        let test_instance = Instance {
+            id: "test-sc-id".to_string(),
+            name: "TestInstance".to_string(),
+            account_id: "acc-1".to_string(),
+            mode: "auth-only".to_string(),
+            port: 9999,
+            status: "stopped".to_string(),
+            tokens_str: "0.0M tokens".to_string(),
+            workspace_path: Some(temp_dir.to_string_lossy().to_string()),
+            profile_dir: temp_dir.to_string_lossy().to_string(),
+            pid: None,
+            last_used: "Now".to_string(),
+            binary_path: None,
+            custom_flags: Some("--test-flag".to_string()),
+            env_vars: None,
+            app_type: Some("antigravity_ide".to_string()),
+        };
+
+        let res = create_instance_desktop_shortcut(&test_instance, &binary, None);
+        assert!(res.is_ok(), "create_instance_desktop_shortcut should succeed: {:?}", res);
+        
+        let bat_path = temp_dir.join("launch.bat");
+        assert!(bat_path.exists(), "launch.bat must be created in profile directory");
+        
+        let bat_content = std::fs::read_to_string(&bat_path).unwrap();
+        assert!(bat_content.contains("SSH_CONNECTION=127.0.0.1 1234 127.0.0.1 22"), "launch.bat must set SSH_CONNECTION");
+        assert!(bat_content.contains("--user-data-dir="), "launch.bat must include user-data-dir");
+        assert!(bat_content.contains("--test-flag"), "launch.bat must include custom flags");
+
+        if let Ok(sc_path) = res {
+            assert!(sc_path.exists(), "Desktop .lnk shortcut must exist on disk");
+            let _ = std::fs::remove_file(&sc_path);
+        }
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }

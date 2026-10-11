@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { isTauri } from '../api';
 import { AntigravityInstance, AntigravityAccount, LogEntry } from '../types/antigravity';
 import { formatSecondsToTime, formatCompactNumber, formatCurrency, formatTimeLeft } from '../utils/formatters';
 import { 
@@ -38,7 +40,10 @@ import {
   ChevronUp,
   Cpu,
   Layers,
-  Zap
+  Zap,
+  Monitor,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 
 interface AntigravityWorkspaceProps {
@@ -49,6 +54,7 @@ interface AntigravityWorkspaceProps {
   onOpenSettings: (instance: AntigravityInstance) => void;
   onAddLog: (log: Omit<LogEntry, 'id' | 'timestamp'>) => void;
   onLaunchIde?: (instance: AntigravityInstance) => void;
+  onDeleteInstance?: (id: string) => void;
 }
 
 export function AntigravityWorkspace({
@@ -59,6 +65,7 @@ export function AntigravityWorkspace({
   onOpenSettings,
   onAddLog,
   onLaunchIde,
+  onDeleteInstance,
 }: AntigravityWorkspaceProps) {
   const [activeEditorTab, setActiveEditorTab] = useState<'code' | 'logs' | 'telemetry'>('code');
   const [showTelemetryBar, setShowTelemetryBar] = useState(true);
@@ -67,6 +74,8 @@ export function AntigravityWorkspace({
   const [isCopied, setIsCopied] = useState(false);
   const [copiedCli, setCopiedCli] = useState(false);
   const [isDiffReviewed, setIsDiffReviewed] = useState(false);
+  const [shortcutCreated, setShortcutCreated] = useState(false);
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
 
   const isRunning = instance.status === 'running';
 
@@ -131,6 +140,22 @@ export function AntigravityWorkspace({
     setTimeout(() => setCopiedCli(false), 2000);
   };
 
+  const handleCreateDesktopShortcut = async () => {
+    if (isTauri()) {
+      try {
+        await invoke('create_desktop_shortcut', { id: instance.id });
+        setShortcutCreated(true);
+        setTimeout(() => setShortcutCreated(false), 3000);
+      } catch (err) {
+        console.error('Failed to create shortcut:', err);
+      }
+    } else {
+      downloadFile(`${instance.name}.bat`, generateWindowsBatch(instance, account));
+      setShortcutCreated(true);
+      setTimeout(() => setShortcutCreated(false), 3000);
+    }
+  };
+
   const instanceLogs = logs.filter((l) => l.instanceId === instance.id);
 
   // Exact code content from Image 1
@@ -181,6 +206,21 @@ export function AntigravityWorkspace({
 
           <div className="h-3 w-[1px] bg-[#2A2C34] mx-1" />
 
+          {/* App Type Pill */}
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#1B1C21] border border-[#262830] font-mono text-[11px]">
+            {instance.appType === 'antigravity' ? (
+              <span className="text-emerald-400 flex items-center gap-1 font-semibold">
+                <Terminal className="w-3 h-3" /> Antigravity
+              </span>
+            ) : (
+              <span className="text-blue-400 flex items-center gap-1 font-semibold">
+                <Code className="w-3 h-3" /> Antigravity IDE
+              </span>
+            )}
+          </div>
+
+          <div className="h-3 w-[1px] bg-[#2A2C34] mx-1" />
+
           {/* Clean Neutral Timer */}
           <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#1B1C21] border border-[#262830] font-mono text-[11px] text-zinc-300">
             <span className={`w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-emerald-500' : 'bg-zinc-500'}`} />
@@ -226,17 +266,17 @@ export function AntigravityWorkspace({
             </button>
           )}
 
-          {/* Download Shortcut button */}
+          {/* Create Desktop Shortcut button */}
           <button
-            onClick={() => downloadFile(`launch-${instance.name}.bat`, generateWindowsBatch(instance, account))}
-            className="hidden md:flex items-center gap-1.5 px-2 py-1 text-xs text-[#8B8F9A] hover:text-zinc-200 hover:bg-[#1E2026] rounded border border-[#272932] transition cursor-pointer font-mono"
-            title="Download Windows Desktop .bat Shortcut"
+            onClick={handleCreateDesktopShortcut}
+            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 text-xs text-zinc-200 hover:text-white bg-[#191B22] hover:bg-[#222530] rounded border border-[#2A2E3D] transition cursor-pointer font-mono shadow-2xs"
+            title="Create Windows Desktop .lnk shortcut with Antigravity icon"
           >
-            <Download className="w-3 h-3" />
-            Shortcut
+            {shortcutCreated ? <Check className="w-3 h-3 text-emerald-400" /> : <Monitor className="w-3 h-3 text-blue-400" />}
+            <span>{shortcutCreated ? 'Shortcut Created!' : 'Desktop Shortcut'}</span>
           </button>
 
-          {/* Authentic Clean "Open IDE" Button */}
+          {/* Authentic Clean "Open IDE / Antigravity" Button */}
           <button
             onClick={() => {
               if (onLaunchIde) {
@@ -249,7 +289,7 @@ export function AntigravityWorkspace({
             title="Launch native Antigravity window with isolated profile"
           >
             <ExternalLink className="w-3 h-3" />
-            <span>Open IDE</span>
+            <span>{instance.appType === 'antigravity' ? 'Open Antigravity' : 'Open IDE'}</span>
           </button>
 
           <button
@@ -259,30 +299,64 @@ export function AntigravityWorkspace({
           >
             <Settings className="w-3.5 h-3.5" />
           </button>
+
+          {onDeleteInstance && (
+            showConfirmDelete ? (
+              <div className="flex items-center gap-1.5 bg-rose-950/60 border border-rose-800/80 px-2 py-0.5 rounded">
+                <span className="text-[10px] text-rose-300">Delete?</span>
+                <button
+                  onClick={() => onDeleteInstance(instance.id)}
+                  className="px-1.5 py-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded text-[10px] font-medium cursor-pointer"
+                >
+                  Yes
+                </button>
+                <button
+                  onClick={() => setShowConfirmDelete(false)}
+                  className="px-1.5 py-0.5 bg-[#1F2229] hover:bg-[#282B34] text-zinc-300 rounded text-[10px] cursor-pointer"
+                >
+                  No
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowConfirmDelete(true)}
+                className="p-1 text-[#7D818C] hover:text-rose-400 hover:bg-[#1E2026] rounded transition cursor-pointer"
+                title="Delete this Instance Profile"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )
+          )}
         </div>
       </div>
 
       {/* Real Profile & Workspace Details Strip */}
       {showTelemetryBar && (
         <div className="bg-[#121316] border-b border-[#212328] px-4 py-2 flex flex-wrap items-center justify-between gap-4 text-xs select-none">
-          {/* Account Identity */}
+          {/* App Type badge in strip */}
           <div className="flex items-center gap-2 text-zinc-300">
-            <ShieldCheck className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-            <span className="font-medium">{account?.name || 'Standard Profile'}</span>
-            {account?.email && (
-              <span className="text-[11px] text-[#7D818C] font-mono">({account.email})</span>
+            {instance.appType === 'antigravity' ? (
+              <span className="text-emerald-400 flex items-center gap-1.5 font-medium">
+                <Terminal className="w-3.5 h-3.5" />
+                Antigravity (Standalone)
+              </span>
+            ) : (
+              <span className="text-blue-400 flex items-center gap-1.5 font-medium">
+                <Code className="w-3.5 h-3.5" />
+                Antigravity IDE
+              </span>
             )}
-            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#1A1B20] text-zinc-300 border border-[#272932]">
-              {account?.tier || 'Pro'}
+            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#1A1B20] text-zinc-400 border border-[#272932]">
+              {account?.name || 'Local Profile'}
             </span>
           </div>
 
           {/* Real Workspace & Profile details */}
           <div className="flex flex-wrap items-center gap-4 text-[11px] font-mono">
             <div className="flex items-center gap-1.5 text-[#7D818C]">
-              <span>Workspace:</span>
+              <span>Workspace Profile:</span>
               <span className="text-zinc-200 truncate max-w-xs" title={instance.workspacePath}>
-                {instance.workspacePath || 'Default (%USERPROFILE%\\AntigravityProfiles)'}
+                {instance.workspacePath || instance.profileDir || 'Default'}
               </span>
             </div>
 
@@ -604,8 +678,14 @@ export function AntigravityWorkspace({
 
                 <div className="space-y-2 mt-4 pt-3 border-t border-[#1F2026] text-xs">
                   <div className="flex justify-between text-[#7D818C]">
-                    <span>Workspace Directory:</span>
-                    <span className="text-zinc-200 truncate max-w-xs">{instance.workspacePath || 'Default (%USERPROFILE%\\AntigravityProfiles)'}</span>
+                    <span>App Type:</span>
+                    <span className="text-zinc-200 font-semibold">
+                      {instance.appType === 'antigravity' ? 'Antigravity (Standalone Desktop App)' : 'Antigravity IDE (VS Code-based)'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-[#7D818C]">
+                    <span>Workspace Profile Directory:</span>
+                    <span className="text-zinc-200 truncate max-w-xs">{instance.workspacePath || instance.profileDir || 'Default (%USERPROFILE%\\AntigravityProfiles)'}</span>
                   </div>
                   <div className="flex justify-between text-[#7D818C]">
                     <span>Profile Data:</span>
@@ -624,10 +704,19 @@ export function AntigravityWorkspace({
 
               {/* Launcher Files for this Instance */}
               <div className="border border-[#22242B] rounded-xl p-4 bg-[#141519] space-y-3">
-                <h4 className="text-xs font-semibold text-zinc-200 flex items-center gap-2">
-                  <Download className="w-3.5 h-3.5 text-[#7D818C]" />
-                  Download Desktop Shortcut Files
-                </h4>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-semibold text-zinc-200 flex items-center gap-2">
+                    <Monitor className="w-3.5 h-3.5 text-[#7D818C]" />
+                    Desktop Shortcut & Launcher Files
+                  </h4>
+                  <button
+                    onClick={handleCreateDesktopShortcut}
+                    className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-medium cursor-pointer transition flex items-center gap-1.5"
+                  >
+                    {shortcutCreated ? <Check className="w-3.5 h-3.5" /> : <Monitor className="w-3.5 h-3.5" />}
+                    <span>{shortcutCreated ? 'Shortcut Created!' : 'Add Shortcut to Desktop'}</span>
+                  </button>
+                </div>
                 <div className="grid grid-cols-2 gap-2 font-sans">
                   <button
                     onClick={() => downloadFile(`antigravity-${instance.name}.desktop`, generateLinuxDesktopEntry(instance))}

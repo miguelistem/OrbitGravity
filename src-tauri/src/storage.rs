@@ -93,6 +93,7 @@ pub fn get_seed_data() -> FleetState {
             binary_path: None,
             custom_flags: None,
             env_vars: None,
+            app_type: Some("antigravity_ide".to_string()),
         },
         Instance {
             id: "inst-2".to_string(),
@@ -109,6 +110,7 @@ pub fn get_seed_data() -> FleetState {
             binary_path: None,
             custom_flags: None,
             env_vars: None,
+            app_type: Some("antigravity".to_string()),
         },
         Instance {
             id: "inst-3".to_string(),
@@ -125,6 +127,7 @@ pub fn get_seed_data() -> FleetState {
             binary_path: None,
             custom_flags: None,
             env_vars: None,
+            app_type: Some("antigravity_ide".to_string()),
         },
     ];
 

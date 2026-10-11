@@ -55,6 +55,8 @@ pub struct Instance {
     pub custom_flags: Option<String>,
     #[serde(default, alias = "envVars")]
     pub env_vars: Option<std::collections::HashMap<String, String>>,
+    #[serde(default, alias = "appType")]
+    pub app_type: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -97,4 +99,8 @@ pub struct CreateInstanceInput {
     pub custom_flags: Option<String>,
     #[serde(default, alias = "envVars")]
     pub env_vars: Option<std::collections::HashMap<String, String>>,
+    #[serde(default, alias = "appType")]
+    pub app_type: Option<String>,
+    #[serde(default, alias = "createShortcut")]
+    pub create_shortcut: Option<bool>,
 }

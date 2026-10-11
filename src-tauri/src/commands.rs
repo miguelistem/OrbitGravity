@@ -4,10 +4,10 @@ use tauri::State;
 use uuid::Uuid;
 
 use crate::models::{Account, AntigravityBinaryInfo, CreateInstanceInput, FleetState, Instance, SystemInfo};
-use crate::detector::{check_junction_support, detect_antigravity_binary, detect_all_antigravity_binaries, get_base_profiles_dir};
+use crate::detector::{check_junction_support, detect_antigravity_binary, detect_all_antigravity_binaries, detect_binary_for_app_type, get_base_profiles_dir};
 use crate::junction::{remove_junction, setup_profile_directories};
 use crate::process::{launch_antigravity_instance, refresh_instances_status, stop_antigravity_instance};
-use crate::shortcut::{create_windows_shortcut, get_shortcut_destination};
+use crate::shortcut::{create_instance_desktop_shortcut, get_shortcut_destination};
 use crate::storage::{save_fleet_state, sync_account_stats};
 use crate::telemetry::{calculate_storage_saved_mb, scan_profile_telemetry};
 
@@ -150,6 +150,8 @@ pub fn create_instance(
         binary_path: None,
         custom_flags: None,
         env_vars: None,
+        app_type: None,
+        create_shortcut: None,
     });
 
     if input.binary_path.is_none() && binary_path.is_some() {
@@ -190,6 +192,15 @@ pub fn create_instance(
     // Setup profile directory and junctions
     setup_profile_directories(&profile_path, &instance_mode)?;
 
+    // If workspace_path is not defined, default to the isolated profile directory and ensure it exists
+    let resolved_ws = match input.workspace_path.filter(|s| !s.trim().is_empty()) {
+        Some(ws) => ws,
+        None => profile_dir_str.clone(),
+    };
+    let _ = std::fs::create_dir_all(&resolved_ws);
+
+    let app_type = input.app_type.unwrap_or_else(|| "antigravity_ide".to_string());
+
     let new_instance = Instance {
         id: format!("inst-{}", &Uuid::new_v4().to_string()[..8]),
         name: input.name,
@@ -198,14 +209,27 @@ pub fn create_instance(
         port: assigned_port,
         status: "stopped".to_string(),
         tokens_str: "0.0M tokens".to_string(),
-        workspace_path: input.workspace_path.filter(|s| !s.trim().is_empty()),
+        workspace_path: Some(resolved_ws),
         profile_dir: profile_dir_str,
         pid: None,
         last_used: "Just created".to_string(),
         binary_path: input.binary_path,
         custom_flags: input.custom_flags,
         env_vars: input.env_vars,
+        app_type: Some(app_type),
     };
+
+    // Optionally create desktop shortcut automatically if requested
+    if input.create_shortcut.unwrap_or(false) {
+        let target_bin = match &new_instance.binary_path {
+            Some(custom) if Path::new(custom).exists() => PathBuf::from(custom),
+            _ => {
+                let a_type = new_instance.app_type.as_deref().unwrap_or("antigravity_ide");
+                detect_binary_for_app_type(a_type).unwrap_or_else(|| PathBuf::from("antigravity.exe"))
+            }
+        };
+        let _ = create_instance_desktop_shortcut(&new_instance, &target_bin, None);
+    }
 
     fleet.instances.push(new_instance.clone());
     sync_account_stats(&mut fleet);
@@ -256,6 +280,12 @@ pub fn delete_instance(state: State<'_, AppState>, id: String) -> Result<bool, S
         let ext_link = Path::new(&inst.profile_dir).join("extensions");
         let _ = remove_junction(&ext_link);
 
+        // Remove desktop shortcut if exists
+        let shortcut_path = get_shortcut_destination(&inst.name, None);
+        if shortcut_path.exists() {
+            let _ = std::fs::remove_file(&shortcut_path);
+        }
+
         sync_account_stats(&mut fleet);
         save_fleet_state(&fleet)?;
         Ok(true)
@@ -278,29 +308,13 @@ pub fn create_desktop_shortcut(
 
     let binary = match &instance.binary_path {
         Some(custom) if Path::new(custom).exists() => PathBuf::from(custom),
-        _ => detect_antigravity_binary().ok_or("Antigravity binary not found to create shortcut")?,
+        _ => {
+            let a_type = instance.app_type.as_deref().unwrap_or("antigravity_ide");
+            detect_binary_for_app_type(a_type).ok_or("Antigravity binary not found to create shortcut")?
+        }
     };
 
-    let profile_path = Path::new(&instance.profile_dir);
-    let data_dir = profile_path.join("data");
-    let ext_dir = profile_path.join("extensions");
-
-    let mut args = format!(
-        "--user-data-dir=\"{}\" --extensions-dir=\"{}\" --new-window",
-        data_dir.display(),
-        ext_dir.display()
-    );
-
-    if let Some(ref ws) = instance.workspace_path {
-        if !ws.trim().is_empty() {
-            args.push_str(&format!(" \"{}\"", ws.trim()));
-        }
-    }
-
-    let destination = get_shortcut_destination(&instance.name, location.as_deref());
-    let desc = format!("BetterMultigravity - Launch profile {}", instance.name);
-
-    create_windows_shortcut(&destination, &binary, &args, profile_path, &desc)?;
+    let destination = create_instance_desktop_shortcut(instance, &binary, location.as_deref())?;
 
     Ok(destination.to_string_lossy().to_string())
 }
