@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![OrbitGravity Icon](./public/favicon.svg)
+<img src="./public/favicon.svg" alt="OrbitGravity Icon" width="128" height="128" />
 
 ### **Antigravity Mission Control for Windows**
 *Run, isolate, and orchestrate unlimited concurrent Google Antigravity & Antigravity IDE instances with zero administrative rights, shared extension junctions, and cosmic memory synchronization.*
