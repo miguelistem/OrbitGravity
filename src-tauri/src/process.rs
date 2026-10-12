@@ -332,7 +332,8 @@ pub fn launch_antigravity_instance(instance: &mut Instance) -> Result<(), String
         }
     };
 
-    let profile_path = Path::new(&instance.profile_dir);
+    let profile_path_buf = crate::detector::expand_path_str(&instance.profile_dir);
+    let profile_path = profile_path_buf.as_path();
     setup_profile_directories(profile_path, &instance.mode)?;
 
     let data_dir = profile_path.join("data");
@@ -349,7 +350,8 @@ pub fn launch_antigravity_instance(instance: &mut Instance) -> Result<(), String
 
     // Optional workspace directory
     if let Some(ref ws) = instance.workspace_path {
-        let trimmed = ws.trim();
+        let expanded = crate::detector::expand_path_str(ws);
+        let trimmed = expanded.to_string_lossy().trim().to_string();
         if !trimmed.is_empty() {
             cmd.arg(trimmed);
         }

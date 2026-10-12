@@ -969,4 +969,37 @@ fn test_antigravity_app_filtering_ignores_ide() {
     }
 }
 
+#[test]
+fn test_expand_path_str_userprofile() {
+    let raw = "%USERPROFILE%\\AntigravityProfiles\\MyTestProfile";
+    let expanded = app_lib::detector::expand_path_str(raw);
+    assert!(!expanded.to_string_lossy().contains("%USERPROFILE%"), "Must expand %USERPROFILE%");
+    assert!(expanded.is_absolute(), "Expanded path must be absolute");
+
+    let raw_tilde = "~/Projects/OrbitTest";
+    let expanded_tilde = app_lib::detector::expand_path_str(raw_tilde);
+    assert!(!expanded_tilde.to_string_lossy().starts_with('~'), "Must expand tilde ~/");
+    assert!(expanded_tilde.is_absolute(), "Expanded tilde path must be absolute");
+
+    let raw_abs = "D:\\CustomDrive\\MyWorkspace";
+    let expanded_abs = app_lib::detector::expand_path_str(raw_abs);
+    assert_eq!(expanded_abs.to_string_lossy(), "D:\\CustomDrive\\MyWorkspace");
+}
+
+#[test]
+fn test_profile_directory_setup_with_spaces() {
+    let temp_root = std::env::temp_dir().join(format!("orbit test spaces {}", uuid::Uuid::new_v4()));
+    let setup_res = app_lib::junction::setup_profile_directories(&temp_root, "auth-only");
+    assert!(setup_res.is_ok(), "Profile directory setup must succeed even with spaces in path: {:?}", setup_res);
+
+    assert!(temp_root.join("data").exists(), "data directory must exist");
+    assert!(temp_root.join("extensions").exists(), "extensions junction or dir must exist");
+    assert!(temp_root.join("appdata").join("Roaming").exists(), "Roaming dir must exist");
+    assert!(temp_root.join("appdata").join("Local").exists(), "Local dir must exist");
+
+    // Cleanup
+    let _ = app_lib::junction::remove_junction(&temp_root.join("extensions"));
+    let _ = std::fs::remove_dir_all(&temp_root);
+}
+
 

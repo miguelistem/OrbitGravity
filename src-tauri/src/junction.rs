@@ -60,7 +60,10 @@ pub fn remove_junction(link: &Path) -> Result<(), String> {
 }
 
 /// Sets up the complete isolated directory structure for an Antigravity profile.
-pub fn setup_profile_directories(profile_dir: &Path, mode: &str) -> Result<(), String> {
+pub fn setup_profile_directories(raw_profile_dir: &Path, mode: &str) -> Result<(), String> {
+    let profile_dir_buf = crate::detector::expand_path(raw_profile_dir);
+    let profile_dir = profile_dir_buf.as_path();
+
     let data_dir = profile_dir.join("data");
     let extensions_dir = profile_dir.join("extensions");
     let roaming_dir = profile_dir.join("appdata").join("Roaming");
@@ -91,17 +94,23 @@ pub fn setup_profile_directories(profile_dir: &Path, mode: &str) -> Result<(), S
         }
     }
 
-    // Ensure Windows user shell folders exist under isolated USERPROFILE so file pickers never error
+    // Ensure Windows user shell folders exist under isolated USERPROFILE so file pickers never error.
+    // Use dirs shell APIs so OneDrive-redirected folders (Desktop/Documents) are accurately linked.
     let real_home = dirs::home_dir()
         .or_else(|| std::env::var("USERPROFILE").ok().map(std::path::PathBuf::from))
         .unwrap_or_else(|| std::path::PathBuf::from("."));
 
-    for shell_folder in &["Desktop", "Documents", "Downloads"] {
-        let profile_folder = profile_dir.join(shell_folder);
-        let real_folder = real_home.join(shell_folder);
+    let shell_targets = [
+        ("Desktop", dirs::desktop_dir().unwrap_or_else(|| real_home.join("Desktop"))),
+        ("Documents", dirs::document_dir().unwrap_or_else(|| real_home.join("Documents"))),
+        ("Downloads", dirs::download_dir().unwrap_or_else(|| real_home.join("Downloads"))),
+    ];
+
+    for (shell_name, real_target) in shell_targets {
+        let profile_folder = profile_dir.join(shell_name);
         if !profile_folder.exists() {
-            if real_folder.exists() {
-                let _ = create_junction(&profile_folder, &real_folder);
+            if real_target.exists() {
+                let _ = create_junction(&profile_folder, &real_target);
             }
             if !profile_folder.exists() {
                 let _ = std::fs::create_dir_all(&profile_folder);

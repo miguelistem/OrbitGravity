@@ -209,7 +209,7 @@ pub fn create_instance(
     // If user provided a specific workspace/profile directory, use it directly as the profile folder;
     // otherwise default to %USERPROFILE%\AntigravityProfiles\<folder_name>
     let profile_path = match input.workspace_path.as_deref().filter(|s| !s.trim().is_empty()) {
-        Some(ws) => PathBuf::from(ws.trim()),
+        Some(ws) => crate::detector::expand_path_str(ws),
         None => {
             let base_profiles = get_base_profiles_dir();
             base_profiles.join(&folder_name)
@@ -308,7 +308,8 @@ pub fn update_instance(
         instance.mode = m;
     }
     if let Some(ws) = workspace_path {
-        instance.workspace_path = Some(ws);
+        let expanded = crate::detector::expand_path_str(&ws);
+        instance.workspace_path = Some(expanded.to_string_lossy().to_string());
     }
     if let Some(flags) = custom_flags {
         instance.custom_flags = Some(flags);
@@ -565,10 +566,10 @@ pub fn pick_file() -> Result<Option<String>, String> {
 
 #[tauri::command]
 pub fn open_in_explorer(path: String) -> Result<(), String> {
-    let p = std::path::Path::new(&path);
+    let p = crate::detector::expand_path_str(&path);
     if p.exists() {
         let _ = std::process::Command::new("explorer.exe")
-            .arg(&path)
+            .arg(p.to_string_lossy().to_string())
             .spawn();
     }
     Ok(())

@@ -130,6 +130,53 @@ pub fn get_system_extensions_dir() -> PathBuf {
     }
 }
 
+/// Expands environment variable placeholders (e.g. %USERPROFILE%, %LOCALAPPDATA%, %APPDATA%, ~/)
+/// into canonical, absolute filesystem paths. Prevents Win32 APIs from treating placeholders as literal names.
+pub fn expand_path_str(p: &str) -> PathBuf {
+    let trimmed = p.trim();
+    if trimmed.is_empty() {
+        return PathBuf::new();
+    }
+
+    let mut s = trimmed.to_string();
+
+    // Check for Windows %ENV% variables
+    if s.contains('%') {
+        if let Some(home) = dirs::home_dir() {
+            let h = home.to_string_lossy();
+            s = s.replace("%USERPROFILE%", &h)
+                 .replace("%userprofile%", &h)
+                 .replace("%UserProfile%", &h);
+        }
+        if let Some(local) = dirs::data_local_dir() {
+            let l = local.to_string_lossy();
+            s = s.replace("%LOCALAPPDATA%", &l)
+                 .replace("%localappdata%", &l)
+                 .replace("%LocalAppData%", &l);
+        }
+        if let Some(roaming) = dirs::config_dir() {
+            let r = roaming.to_string_lossy();
+            s = s.replace("%APPDATA%", &r)
+                 .replace("%appdata%", &r)
+                 .replace("%AppData%", &r);
+        }
+    }
+
+    // Check for Unix/PowerShell style ~/
+    if s.starts_with("~/") || s.starts_with("~\\") {
+        if let Some(home) = dirs::home_dir() {
+            return home.join(&s[2..]);
+        }
+    }
+
+    PathBuf::from(s)
+}
+
+/// Helper to expand Path references containing environment placeholders.
+pub fn expand_path(p: &std::path::Path) -> PathBuf {
+    expand_path_str(&p.to_string_lossy())
+}
+
 /// Tests NTFS Directory Junction support on the system.
 pub fn check_junction_support() -> bool {
     let temp_dir = std::env::temp_dir();

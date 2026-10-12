@@ -2,7 +2,7 @@ import { AntigravityInstance, AntigravityAccount } from '../types/antigravity';
 
 export function generateWindowsBatch(instance: AntigravityInstance, account?: AntigravityAccount): string {
   const envLines = Object.entries(instance.envVars || {})
-    .map(([k, v]) => `set ${k}=${v}`)
+    .map(([k, v]) => `set "${k}=${v}"`)
     .join('\r\n');
 
   const cleanName = instance.name.replace(/[^a-zA-Z0-9_-]/g, '') || 'Instance';
@@ -23,11 +23,11 @@ title Antigravity - ${instance.name}
 echo [OrbitGravity] Initializing isolated Antigravity profile: "${instance.name}"...
 
 REM Bypass Electron single-instance socket rendezvous
-set SSH_CONNECTION=127.0.0.1 1234 127.0.0.1 22
+set "SSH_CONNECTION=127.0.0.1 1234 127.0.0.1 22"
 ${envLines ? envLines + '\r\n' : ''}
-set PROFILE_DIR=%USERPROFILE%\\AntigravityProfiles\\${cleanName}
-set DATA_DIR=%PROFILE_DIR%\\data
-set EXT_DIR=%PROFILE_DIR%\\extensions
+set "PROFILE_DIR=%USERPROFILE%\\AntigravityProfiles\\${cleanName}"
+set "DATA_DIR=%PROFILE_DIR%\\data"
+set "EXT_DIR=%PROFILE_DIR%\\extensions"
 
 REM Check for Antigravity IDE or standard Antigravity binary
 if exist "%LOCALAPPDATA%\\Programs\\Antigravity IDE\\Antigravity IDE.exe" (
@@ -46,7 +46,7 @@ if exist "%LOCALAPPDATA%\\Programs\\Antigravity IDE\\Antigravity IDE.exe" (
 export function generateShellOneLiner(instance: AntigravityInstance): string {
   const cleanName = instance.name.replace(/[^a-zA-Z0-9_-]/g, '') || 'Instance';
   const workspaceArg = instance.workspacePath ? ` "${instance.workspacePath}"` : '';
-  return `cmd /c "set SSH_CONNECTION=127.0.0.1 1234 127.0.0.1 22 && start \"\" \"%LOCALAPPDATA%\\Programs\\Antigravity IDE\\Antigravity IDE.exe\" --user-data-dir=\"%USERPROFILE%\\AntigravityProfiles\\${cleanName}\\data\" --extensions-dir=\"%USERPROFILE%\\AntigravityProfiles\\${cleanName}\\extensions\" --new-window${workspaceArg}"`;
+  return `cmd /c "set \"SSH_CONNECTION=127.0.0.1 1234 127.0.0.1 22\" && start \"\" \"%LOCALAPPDATA%\\Programs\\Antigravity IDE\\Antigravity IDE.exe\" --user-data-dir=\"%USERPROFILE%\\AntigravityProfiles\\${cleanName}\\data\" --extensions-dir=\"%USERPROFILE%\\AntigravityProfiles\\${cleanName}\\extensions\" --new-window${workspaceArg}"`;
 }
 
 export function generateLinuxDesktopEntry(instance: AntigravityInstance): string {

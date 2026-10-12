@@ -87,7 +87,8 @@ pub fn create_instance_desktop_shortcut(
     target_binary: &Path,
     location: Option<&str>,
 ) -> Result<PathBuf, String> {
-    let profile_path = Path::new(&instance.profile_dir);
+    let profile_path_buf = crate::detector::expand_path_str(&instance.profile_dir);
+    let profile_path = profile_path_buf.as_path();
     let data_dir = profile_path.join("data");
     let ext_dir = profile_path.join("extensions");
     
@@ -108,7 +109,8 @@ pub fn create_instance_desktop_shortcut(
     
     let mut ws_arg = String::new();
     if let Some(ref ws) = instance.workspace_path {
-        let trimmed = ws.trim();
+        let expanded = crate::detector::expand_path_str(ws);
+        let trimmed = expanded.to_string_lossy().trim().to_string();
         if !trimmed.is_empty() {
             ws_arg.push_str(&format!(" \"{}\"", trimmed));
         }
@@ -117,7 +119,7 @@ pub fn create_instance_desktop_shortcut(
     let mut env_lines = String::new();
     if let Some(ref envs) = instance.env_vars {
         for (k, v) in envs {
-            env_lines.push_str(&format!("set {}={}\r\n", k, v));
+            env_lines.push_str(&format!("set \"{}={}\"\r\n", k, v));
         }
     }
 
@@ -128,10 +130,10 @@ pub fn create_instance_desktop_shortcut(
         "@echo off\r\n\
          title Antigravity - {name}\r\n\
          REM OrbitGravity isolated profile launcher\r\n\
-         set SSH_CONNECTION=127.0.0.1 1234 127.0.0.1 22\r\n\
-         set APPDATA={roaming}\r\n\
-         set LOCALAPPDATA={local}\r\n\
-         set USERPROFILE={profile}\r\n\
+         set \"SSH_CONNECTION=127.0.0.1 1234 127.0.0.1 22\"\r\n\
+         set \"APPDATA={roaming}\"\r\n\
+         set \"LOCALAPPDATA={local}\"\r\n\
+         set \"USERPROFILE={profile}\"\r\n\
          {env_lines}\
          start \"\" \"{bin}\" --user-data-dir=\"{data}\" --extensions-dir=\"{ext}\" --new-window{flags}{ws}\r\n",
         name = instance.name,
