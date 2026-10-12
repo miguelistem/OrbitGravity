@@ -669,8 +669,8 @@ export function AntigravityWorkspace({
               </h2>
               {/* Instance Tier Badge */}
               {instance.tier === 'Pro' ? (
-                <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-gradient-to-r from-purple-600/90 via-fuchsia-600/90 to-indigo-600/90 text-white border border-purple-400/60 shadow-[0_0_12px_rgba(168,85,247,0.45)]">
-                  <Sparkles className="w-2.5 h-2.5 text-amber-300" /> PRO
+                <span className="inline-flex items-center justify-center text-[10px] font-mono font-extrabold px-2 py-0.5 rounded-full bg-gradient-to-r from-zinc-200 via-white to-zinc-300 text-zinc-950 border border-white/90 shadow-[0_0_10px_rgba(255,255,255,0.5)] tracking-wide">
+                  PRO
                 </span>
               ) : instance.tier === 'Plus' ? (
                 <span className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-blue-950/80 text-blue-300 border border-blue-500/60 shadow-[0_0_8px_rgba(59,130,246,0.3)]">

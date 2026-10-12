@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { AntigravityInstance, AntigravityAccount, DisplayMode, AntigravityAppType, GravitationalSyncMode, InstanceTier } from '../types/antigravity';
-import { X, Plus, Trash2, Folder, Code, Terminal, Check, AlertTriangle, Monitor, ChevronDown, Brain, Sparkles, Zap, MessageSquare, Lock } from 'lucide-react';
+import { AntigravityInstance, AntigravityAccount, DisplayMode, AntigravityAppType, GravitationalSyncMode, InstanceTier, AvailableGroup } from '../types/antigravity';
+import { X, Plus, Trash2, Folder, Code, Terminal, Check, AlertTriangle, Monitor, ChevronDown, Brain, Sparkles, Zap, MessageSquare, Lock, RefreshCw } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { isTauri } from '../api';
 
@@ -10,7 +10,7 @@ interface InstanceModalProps {
   onSave: (
     instanceData: Partial<AntigravityInstance>,
     initialImport?: { source: 'global' | string; appType: AntigravityAppType }
-  ) => void;
+  ) => void | Promise<void>;
   onDelete?: (id: string) => void;
   accounts: AntigravityAccount[];
   initialInstance?: AntigravityInstance | null;
@@ -49,10 +49,11 @@ export function InstanceModal({
   // Form states
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [tag, setTag] = useState('Core Infrastructure');
+  const [tag, setTag] = useState('Projects');
   const [color, setColor] = useState('neutral');
   const [icon, setIcon] = useState('terminal');
-  const [tier, setTier] = useState<InstanceTier>('Free');
+  const [tier, setTier] = useState<InstanceTier>('Pro');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [accountId, setAccountId] = useState('');
   const [appType, setAppType] = useState<AntigravityAppType>('antigravity');
   const [workspacePath, setWorkspacePath] = useState('');
@@ -66,7 +67,22 @@ export function InstanceModal({
   ]);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  const [isUserTypingCategory, setIsUserTypingCategory] = useState(false);
+  const [backendGroups, setBackendGroups] = useState<AvailableGroup[]>([]);
   const categoryContainerRef = useRef<HTMLDivElement>(null);
+
+  const refreshAvailableGroups = async () => {
+    if (isTauri()) {
+      try {
+        const res = await invoke<AvailableGroup[]>('list_available_groups');
+        if (res && res.length > 0) {
+          setBackendGroups(res);
+        }
+      } catch (err) {
+        console.warn('Failed to load available groups from backend:', err);
+      }
+    }
+  };
 
   // Active tab: 'general' (Workspace) | 'env' (Environment) | 'memory' (Conversation Memory)
   const [activeTab, setActiveTab] = useState<'general' | 'env' | 'memory'>('general');
@@ -108,16 +124,18 @@ export function InstanceModal({
       prevInitialInstanceIdRef.current = currentId;
 
       setShowConfirmDelete(false);
+      setIsUserTypingCategory(false);
+      refreshAvailableGroups();
       const preferredBase = getPreferredBaseProfilesDir();
       setBaseDir(preferredBase);
 
       if (initialInstance) {
         setName(initialInstance.name);
         setDescription(initialInstance.description || '');
-        setTag(initialInstance.tag || 'Core Infrastructure');
+        setTag(initialInstance.tag || 'Projects');
         setColor(initialInstance.color || 'neutral');
         setIcon(initialInstance.icon || 'terminal');
-        setTier(initialInstance.tier || 'Free');
+        setTier(initialInstance.tier || 'Pro');
         setAccountId(initialInstance.accountId || (accounts[0]?.id || ''));
         setAppType(initialInstance.appType || 'antigravity');
         setWorkspacePath(initialInstance.workspacePath || initialInstance.profileDir || '');
@@ -143,7 +161,7 @@ export function InstanceModal({
         setTag('Projects');
         setColor('neutral');
         setIcon('terminal');
-        setTier('Free');
+        setTier('Pro');
         setAccountId(accounts[0]?.id || '');
         setAppType('antigravity');
         setWorkspacePath(`${preferredBase}\\${clean}`);
@@ -164,7 +182,14 @@ export function InstanceModal({
 
   if (!isOpen) return null;
 
-  const cleanFolderPreview = name.trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'Instance';
+  const trimmedName = name.trim();
+  const isDuplicateName = !!instances?.some(
+    (inst) =>
+      inst.name.trim().toLowerCase() === trimmedName.toLowerCase() &&
+      (!isEditing || inst.id !== initialInstance?.id)
+  );
+
+  const cleanFolderPreview = trimmedName.replace(/[^a-zA-Z0-9_-]/g, '') || 'Instance';
   const defaultWorkspacePreview = `${baseDir}\\${cleanFolderPreview}`;
 
   const handleNameChange = (newName: string) => {
@@ -229,55 +254,64 @@ export function InstanceModal({
     setEnvVars(updated);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const envObj: Record<string, string> = {};
-    envVars.forEach((ev) => {
-      if (ev.key.trim()) {
-        envObj[ev.key.trim()] = ev.value.trim();
-      }
-    });
+    if (isSubmitting || isDuplicateName || hasTagError || !trimmedName || !currentTagTrimmed) return;
+    setIsSubmitting(true);
 
-    const trimmedPath = workspacePath.trim();
-    if (trimmedPath) {
-      const lastSlash = trimmedPath.lastIndexOf('\\');
-      if (lastSlash > 0) {
-        const extracted = trimmedPath.substring(0, lastSlash);
-        setPreferredBaseProfilesDir(extracted);
+    try {
+      const envObj: Record<string, string> = {};
+      envVars.forEach((ev) => {
+        if (ev.key.trim()) {
+          envObj[ev.key.trim()] = ev.value.trim();
+        }
+      });
+
+      const trimmedPath = workspacePath.trim();
+      if (trimmedPath) {
+        const lastSlash = trimmedPath.lastIndexOf('\\');
+        if (lastSlash > 0) {
+          const extracted = trimmedPath.substring(0, lastSlash);
+          setPreferredBaseProfilesDir(extracted);
+        }
       }
+
+      let initialImport: { source: 'global' | string; appType: AntigravityAppType } | undefined = undefined;
+      if (!isEditing && syncMode === 'solo' && memoryImportMode !== 'clean') {
+        if (memoryImportMode === 'global') {
+          initialImport = { source: 'global', appType: 'antigravity_ide' };
+        } else if (memoryImportMode === 'instance' && importSourceInstanceId) {
+          const src = (instances || []).find((i) => i.id === importSourceInstanceId);
+          initialImport = {
+            source: importSourceInstanceId,
+            appType: src?.appType || 'antigravity_ide',
+          };
+        }
+      }
+
+      await onSave({
+        name: name.trim() || 'Antigravity Session',
+        description,
+        tag,
+        color,
+        icon,
+        tier,
+        accountId: accountId || accounts[0]?.id,
+        appType,
+        workspacePath: trimmedPath,
+        displayMode,
+        customFlags,
+        envVars: envObj,
+        createShortcut,
+        blackholeSync: syncMode === 'black_hole',
+        syncMode,
+      }, initialImport);
+      onClose();
+    } catch (err) {
+      console.error('Failed to save instance:', err);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    let initialImport: { source: 'global' | string; appType: AntigravityAppType } | undefined = undefined;
-    if (!isEditing && syncMode === 'solo' && memoryImportMode !== 'clean') {
-      if (memoryImportMode === 'global') {
-        initialImport = { source: 'global', appType: 'antigravity_ide' };
-      } else if (memoryImportMode === 'instance' && importSourceInstanceId) {
-        const src = (instances || []).find((i) => i.id === importSourceInstanceId);
-        initialImport = {
-          source: importSourceInstanceId,
-          appType: src?.appType || 'antigravity_ide',
-        };
-      }
-    }
-
-    onSave({
-      name: name.trim() || 'Antigravity Session',
-      description,
-      tag,
-      color,
-      icon,
-      tier,
-      accountId: accountId || accounts[0]?.id,
-      appType,
-      workspacePath: trimmedPath,
-      displayMode,
-      customFlags,
-      envVars: envObj,
-      createShortcut,
-      blackholeSync: syncMode === 'black_hole',
-      syncMode,
-    }, initialImport);
-    onClose();
   };
 
   const handleDelete = () => {
@@ -289,20 +323,127 @@ export function InstanceModal({
 
   const iconOptions = ['terminal', 'cpu', 'code', 'database', 'zap', 'server', 'layers'];
 
-  const existingCategoryList = Array.from(
-    new Set(
-      (instances || [])
-        .map((i) => i.tag?.trim())
-        .filter((t): t is string => !!t)
-    )
-  );
-  if (existingCategoryList.length === 0) {
-    existingCategoryList.push('Projects', 'Core Infrastructure', 'General Workspaces');
-  }
+  // Identify all rogue groups (groups containing any instance with syncMode === 'solo')
+  const rogueGroups = (instances || [])
+    .filter((i) => (!initialInstance || i.id !== initialInstance.id) && i.syncMode === 'solo')
+    .map((i) => (i.tag || '').trim().toLowerCase())
+    .filter(Boolean);
 
-  const filteredCategories = existingCategoryList.filter((cat) =>
-    cat.toLowerCase().includes((tag || '').toLowerCase())
+  // Unified, dynamic, real-time list of available groups (combines backend disk/fleet and active React state)
+  const allAvailableGroups: AvailableGroup[] = (() => {
+    const map = new Map<string, { count: number; instances: string[]; hasSharedBrain: boolean }>();
+
+    // 1. Groups from backend (fleet state + _shared_brains folder on disk), excluding rogue groups
+    backendGroups.forEach((bg) => {
+      if (!rogueGroups.includes(bg.name.toLowerCase())) {
+        map.set(bg.name, {
+          count: bg.instanceCount,
+          instances: [...bg.instances],
+          hasSharedBrain: bg.hasSharedBrain,
+        });
+      }
+    });
+
+    // 2. Groups from instances prop (React state), excluding rogue instances and black hole tethers
+    (instances || []).forEach((inst) => {
+      if (inst.syncMode === 'solo' || inst.syncMode === 'black_hole' || inst.blackholeSync) {
+        return;
+      }
+      const g = inst.tag?.trim();
+      if (g && g !== 'General Workspaces' && g !== 'Black Hole Singularity' && !rogueGroups.includes(g.toLowerCase())) {
+        const existing = map.get(g);
+        if (existing) {
+          if (!existing.instances.includes(inst.name)) {
+            existing.instances.push(inst.name);
+          }
+          existing.count = Math.max(existing.count, existing.instances.length);
+        } else {
+          map.set(g, {
+            count: 1,
+            instances: [inst.name],
+            hasSharedBrain: false,
+          });
+        }
+      }
+    });
+
+    // Ensure any rogue groups are purged
+    for (const rg of rogueGroups) {
+      for (const key of Array.from(map.keys())) {
+        if (key.toLowerCase() === rg) {
+          map.delete(key);
+        }
+      }
+    }
+
+    // 3. Fallback standard default if none exist and "Projects" is not a rogue group
+    if (map.size === 0 && !rogueGroups.includes('projects')) {
+      map.set('Projects', { count: 0, instances: [], hasSharedBrain: false });
+    }
+
+    const list: AvailableGroup[] = Array.from(map.entries()).map(([name, data]) => ({
+      name,
+      instanceCount: data.count,
+      instances: data.instances,
+      hasSharedBrain: data.hasSharedBrain,
+    }));
+
+    list.sort((a, b) => b.instanceCount - a.instanceCount || a.name.localeCompare(b.name));
+    return list;
+  })();
+
+  const currentTagTrimmed = tag.trim();
+
+  // Collision checks:
+  // 1. Solo system orbits cannot join existing groups (must create a unique group name)
+  const isSoloExistingGroupCollision =
+    syncMode === 'solo' &&
+    (allAvailableGroups.some((g) => g.name.toLowerCase() === currentTagTrimmed.toLowerCase()) ||
+      (instances || []).some(
+        (i) =>
+          (!initialInstance || i.id !== initialInstance.id) &&
+          (i.tag || '').trim().toLowerCase() === currentTagTrimmed.toLowerCase()
+      ));
+
+  // 2. Solar system orbits cannot join a group that already has a rogue planet
+  const isRogueGroupCollision =
+    syncMode === 'solar_system' && rogueGroups.includes(currentTagTrimmed.toLowerCase());
+
+  const hasTagError = isSoloExistingGroupCollision || isRogueGroupCollision;
+
+  const isExactGroupMatch = allAvailableGroups.some(
+    (g) => g.name.toLowerCase() === currentTagTrimmed.toLowerCase()
   );
+
+  // When user is typing a custom search/group, filter by query; otherwise show ALL available groups
+  const displayedGroups =
+    isUserTypingCategory && !isExactGroupMatch && currentTagTrimmed
+      ? allAvailableGroups.filter((g) => g.name.toLowerCase().includes(currentTagTrimmed.toLowerCase()))
+      : allAvailableGroups;
+
+  const showCreateOption = currentTagTrimmed && !isExactGroupMatch;
+
+  const handleSelectSyncMode = (newMode: GravitationalSyncMode) => {
+    setSyncMode(newMode);
+    if (newMode === 'solo') {
+      const trimmed = tag.trim().toLowerCase();
+      const isTaken =
+        allAvailableGroups.some((g) => g.name.toLowerCase() === trimmed) ||
+        (instances || []).some(
+          (i) => (!initialInstance || i.id !== initialInstance.id) && (i.tag || '').trim().toLowerCase() === trimmed
+        );
+      if (isTaken || trimmed === 'projects') {
+        const clean = name.trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'Profile';
+        setTag(`${clean} Orbit`);
+      }
+    } else if (newMode === 'black_hole') {
+      setTag('Black Hole Singularity');
+    } else if (newMode === 'solar_system') {
+      if (tag === 'Black Hole Singularity') {
+        setTag(allAvailableGroups[0]?.name || 'Projects');
+      }
+    }
+  };
 
   const sameFolderInstances = (instances || []).filter(
     (i) => (!initialInstance || i.id !== initialInstance.id) && i.tag?.trim().toLowerCase() === (tag || '').trim().toLowerCase()
@@ -356,120 +497,307 @@ export function InstanceModal({
               {/* Name & Category */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
-                  <label className="block text-zinc-300 font-medium mb-1">Instance Name</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-zinc-300 font-medium">Instance Name</label>
+                    {isDuplicateName && (
+                      <span className="text-[10px] text-rose-400 font-medium flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3 text-rose-400 shrink-0" />
+                        Already exists
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="text"
                     required
                     value={name}
                     onChange={(e) => handleNameChange(e.target.value)}
                     placeholder="e.g. Portfolio Ideas"
-                    className="w-full bg-[#0F1012] border border-[#23252C] rounded-md px-3 py-1.5 text-zinc-200 focus:outline-none focus:border-zinc-500 font-mono text-xs"
+                    className={`w-full bg-[#0F1012] border rounded-md px-3 py-1.5 text-zinc-200 focus:outline-none font-mono text-xs ${
+                      isDuplicateName
+                        ? 'border-rose-500 focus:border-rose-400 ring-1 ring-rose-500/20'
+                        : 'border-[#23252C] focus:border-zinc-500'
+                    }`}
                   />
+                  {isDuplicateName && (
+                    <p className="text-[10.5px] text-rose-400 mt-1 font-sans">
+                      An instance named "{trimmedName}" already exists. Please choose a unique name.
+                    </p>
+                  )}
                 </div>
 
                 <div ref={categoryContainerRef} className="relative">
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-zinc-300 font-medium">Category / Group</label>
-                    <span className="text-[10px] text-[#7D818C]">Folder in sidebar</span>
+                    <label className="text-zinc-300 font-medium">
+                      {syncMode === 'solo'
+                        ? 'Solo Orbit / Group Name'
+                        : syncMode === 'black_hole'
+                        ? 'Black Hole Singularity'
+                        : 'Category / Group'}
+                    </label>
+                    <span
+                      className={`text-[10px] ${
+                        hasTagError ? 'text-rose-400 font-semibold' : 'text-[#7D818C]'
+                      }`}
+                    >
+                      {syncMode === 'solo'
+                        ? 'Must be a unique private orbit'
+                        : syncMode === 'black_hole'
+                        ? 'Parent Desktop installation'
+                        : `${allAvailableGroups.length} available ${
+                            allAvailableGroups.length === 1 ? 'orbit' : 'orbits'
+                          }`}
+                    </span>
                   </div>
 
-                  <div className="relative flex items-center">
-                    <input
-                      type="text"
-                      value={tag}
-                      onChange={(e) => {
-                        setTag(e.target.value);
-                        setIsCategoryDropdownOpen(true);
-                      }}
-                      onFocus={() => setIsCategoryDropdownOpen(true)}
-                      placeholder="e.g. Projects"
-                      className="w-full bg-[#0F1012] border border-[#23252C] rounded-md pl-3 pr-8 py-1.5 text-zinc-200 focus:outline-none focus:border-zinc-500 text-xs"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
-                      className="absolute right-1.5 p-1 text-zinc-400 hover:text-zinc-200 transition cursor-pointer"
-                      title="Select or browse categories"
-                    >
-                      <ChevronDown
-                        className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                          isCategoryDropdownOpen ? 'rotate-180 text-blue-400' : ''
+                  {syncMode === 'black_hole' ? (
+                    <div className="p-2 rounded-md bg-[#0D0E12] border border-[#23252C] flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">🕳️</span>
+                        <span className="font-mono text-xs text-purple-300 font-semibold">
+                          The Black Hole Singularity
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-mono text-purple-400/80 bg-purple-950/60 px-2 py-0.5 rounded border border-purple-800/40">
+                        Parent Tethered
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="relative flex items-center">
+                      <input
+                        type="text"
+                        value={tag}
+                        onChange={(e) => {
+                          setTag(e.target.value);
+                          setIsUserTypingCategory(true);
+                          setIsCategoryDropdownOpen(true);
+                        }}
+                        onFocus={() => {
+                          setIsCategoryDropdownOpen(true);
+                          refreshAvailableGroups();
+                        }}
+                        placeholder={syncMode === 'solo' ? 'e.g. Solo Pipeline' : 'e.g. Projects'}
+                        className={`w-full bg-[#0F1012] border rounded-md pl-3 pr-8 py-1.5 text-zinc-200 focus:outline-none text-xs font-mono ${
+                          hasTagError
+                            ? 'border-rose-500 focus:border-rose-400 ring-1 ring-rose-500/20'
+                            : 'border-[#23252C] focus:border-zinc-500'
                         }`}
                       />
-                    </button>
-                  </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = !isCategoryDropdownOpen;
+                          setIsCategoryDropdownOpen(next);
+                          if (next) {
+                            setIsUserTypingCategory(false);
+                            refreshAvailableGroups();
+                          }
+                        }}
+                        className="absolute right-1.5 p-1 text-zinc-400 hover:text-zinc-200 transition cursor-pointer"
+                        title="Select or browse categories"
+                      >
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                            isCategoryDropdownOpen ? 'rotate-180 text-blue-400' : ''
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Inline Collision / Validation Alerts */}
+                  {isSoloExistingGroupCollision && (
+                    <p className="text-[10.5px] text-rose-400 mt-1 font-sans flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 text-rose-400 shrink-0" />
+                      Solo system orbits cannot join existing groups ("{currentTagTrimmed}"). Please enter a unique group name for this private orbit.
+                    </p>
+                  )}
+                  {isRogueGroupCollision && (
+                    <p className="text-[10.5px] text-rose-400 mt-1 font-sans flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 text-rose-400 shrink-0" />
+                      Group "{currentTagTrimmed}" belongs to an isolated Solo System (Rogue Planet) and cannot be joined.
+                    </p>
+                  )}
 
                   {/* Dropdown Options List */}
-                  {isCategoryDropdownOpen && (
-                    <div className="absolute left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-[#15171D] border border-[#282B37] rounded-lg shadow-2xl z-50 py-1 text-xs">
-                      <div className="px-3 py-1 text-[10.5px] font-semibold text-zinc-500 uppercase tracking-wider">
-                        Existing Group Folders
-                      </div>
-                      {filteredCategories.length > 0 ? (
-                        filteredCategories.map((cat) => {
-                          const isSelected = tag.trim().toLowerCase() === cat.toLowerCase();
-                          return (
-                            <button
-                              key={cat}
-                              type="button"
-                              onClick={() => {
-                                setTag(cat);
-                                setIsCategoryDropdownOpen(false);
-                              }}
-                              className={`w-full text-left px-3 py-1.5 flex items-center justify-between transition cursor-pointer ${
-                                isSelected
-                                  ? 'bg-[#1E2333] text-blue-400 font-medium'
-                                  : 'text-zinc-300 hover:bg-[#1E2028] hover:text-white'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2 truncate">
-                                <Folder className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                                <span className="truncate">{cat}</span>
-                              </div>
-                              {isSelected && <Check className="w-3.5 h-3.5 text-blue-400 shrink-0" />}
-                            </button>
-                          );
-                        })
+                  {isCategoryDropdownOpen && syncMode !== 'black_hole' && (
+                    <div className="absolute left-0 right-0 mt-1 max-h-56 overflow-y-auto bg-[#15171D] border border-[#282B37] rounded-lg shadow-2xl z-50 py-1 text-xs divide-y divide-[#1F222B]">
+                      {syncMode === 'solo' ? (
+                        <div className="p-2.5 bg-blue-950/30 border-b border-[#202534] text-[11px] text-blue-300 flex items-start gap-2">
+                          <Lock className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
+                          <div className="leading-tight">
+                            <span className="font-semibold block text-zinc-200 mb-0.5">Private Solo Orbit</span>
+                            <span>Solo system orbits cannot join existing groups. You must create a unique group name.</span>
+                          </div>
+                        </div>
                       ) : (
-                        <div className="px-3 py-1.5 text-zinc-400 text-[11px] italic">
-                          No matching existing groups
+                        <div className="px-3 py-1.5 flex items-center justify-between text-[10.5px] font-semibold text-zinc-400 bg-[#121318]">
+                          <span className="flex items-center gap-1.5 uppercase tracking-wider text-zinc-400">
+                            <Sparkles className="w-3 h-3 text-amber-400" />
+                            Available Groups & Orbits ({allAvailableGroups.length})
+                          </span>
+                          {isUserTypingCategory && (
+                            <button
+                              type="button"
+                              onClick={() => setIsUserTypingCategory(false)}
+                              className="text-[10px] text-blue-400 hover:underline cursor-pointer"
+                            >
+                              Show all
+                            </button>
+                          )}
                         </div>
                       )}
 
-                      {tag.trim() &&
-                        !existingCategoryList.some(
-                          (c) => c.toLowerCase() === tag.trim().toLowerCase()
-                        ) && (
-                          <div className="border-t border-[#232530] mt-1 pt-1 px-3 py-1.5 text-zinc-400 text-[11px] flex items-center gap-1.5">
-                            <Plus className="w-3 h-3 text-emerald-400 shrink-0" />
-                            <span className="truncate">
-                              New group: <strong className="text-zinc-200 font-mono">"{tag.trim()}"</strong>
-                            </span>
+                      {/* Create New Group Option if user typed a non-existing name */}
+                      {showCreateOption && !isSoloExistingGroupCollision && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsCategoryDropdownOpen(false);
+                            setIsUserTypingCategory(false);
+                          }}
+                          className="w-full text-left px-3 py-2 bg-emerald-950/25 hover:bg-emerald-950/40 text-emerald-300 transition cursor-pointer flex items-center justify-between"
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <Plus className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                            <div className="truncate">
+                              <span className="text-zinc-300">
+                                {syncMode === 'solo' ? 'Create unique solo group: ' : 'Create new group: '}
+                              </span>
+                              <strong className="text-emerald-300 font-mono">"{currentTagTrimmed}"</strong>
+                              <span className="block text-[10px] text-zinc-500">
+                                {syncMode === 'solo' ? 'Initializes private isolated Solo System' : 'Initializes a new Solar System'}
+                              </span>
+                            </div>
+                          </div>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/50 text-emerald-300 font-mono">
+                            {syncMode === 'solo' ? 'Solo Orbit' : 'New Orbit'}
+                          </span>
+                        </button>
+                      )}
+
+                      {/* List of existing groups */}
+                      <div className="max-h-44 overflow-y-auto">
+                        {syncMode === 'solo' ? (
+                          allAvailableGroups.map((group) => (
+                            <div
+                              key={group.name}
+                              className="w-full text-left px-3 py-2 flex items-center justify-between opacity-50 bg-[#111216] select-none"
+                            >
+                              <div className="flex items-center gap-2 truncate text-zinc-400 text-xs">
+                                <Lock className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                                <span className="truncate">{group.name}</span>
+                                <span className="text-[10px] text-zinc-500">({group.instanceCount} planets)</span>
+                              </div>
+                              <span className="text-[9.5px] text-zinc-600 font-mono">Cannot join in Solo</span>
+                            </div>
+                          ))
+                        ) : displayedGroups.length > 0 ? (
+                          displayedGroups.map((group) => {
+                            const isSelected = tag.trim().toLowerCase() === group.name.toLowerCase();
+                            return (
+                              <button
+                                key={group.name}
+                                type="button"
+                                onClick={() => {
+                                  setTag(group.name);
+                                  setIsUserTypingCategory(false);
+                                  setIsCategoryDropdownOpen(false);
+                                }}
+                                className={`w-full text-left px-3 py-2 flex items-center justify-between transition cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-[#1E2333] text-blue-300 font-medium'
+                                    : 'text-zinc-300 hover:bg-[#1C1E26] hover:text-white'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div
+                                    className={`p-1.5 rounded shrink-0 ${
+                                      isSelected
+                                        ? 'bg-blue-900/40 text-blue-400'
+                                        : 'bg-[#101115] text-zinc-400'
+                                    }`}
+                                  >
+                                    <Folder className="w-3.5 h-3.5" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="truncate font-medium text-xs text-zinc-200">
+                                        {group.name}
+                                      </span>
+                                      {group.hasSharedBrain && (
+                                        <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800/40 font-mono">
+                                          Star Brain
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="text-[10.5px] text-zinc-500 block truncate">
+                                      {group.instanceCount === 0
+                                        ? '0 instances • Ready to orbit'
+                                        : group.instanceCount === 1
+                                        ? `1 instance (${group.instances[0] || 'profile'})`
+                                        : `${group.instanceCount} instances in sync`}
+                                    </span>
+                                  </div>
+                                </div>
+                                {isSelected ? (
+                                  <div className="flex items-center gap-1 text-blue-400 shrink-0 text-[10.5px] font-mono">
+                                    <span>Joined</span>
+                                    <Check className="w-3.5 h-3.5" />
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] text-zinc-500 hover:text-zinc-300 font-mono shrink-0">
+                                    Join →
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })
+                        ) : (
+                          <div className="px-3 py-2 text-zinc-400 text-[11px] italic">
+                            No groups match "{currentTagTrimmed}"
                           </div>
                         )}
+                      </div>
                     </div>
                   )}
 
-                  {/* Quick pills */}
-                  {!isCategoryDropdownOpen && existingCategoryList.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                      <span className="text-[10px] text-zinc-500">Existing:</span>
-                      {existingCategoryList.slice(0, 4).map((cat) => (
-                        <button
-                          key={cat}
-                          type="button"
-                          onClick={() => setTag(cat)}
-                          className={`text-[10.5px] px-2 py-0.5 rounded border transition cursor-pointer ${
-                            tag === cat
-                              ? 'bg-blue-950/40 border-blue-600/60 text-blue-300'
-                              : 'bg-[#15171D] border-[#252834] text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'
-                          }`}
-                        >
-                          {cat}
-                        </button>
-                      ))}
+                  {/* Quick pills or Solo Mode Helper */}
+                  {syncMode === 'solo' ? (
+                    <div className="mt-2 p-1.5 rounded bg-[#101216] border border-[#20222A] text-[10.5px] text-zinc-400 flex items-center gap-1.5">
+                      <Lock className="w-3 h-3 text-blue-400 shrink-0" />
+                      <span>Solo System Orbit: Creates an isolated sandbox that will never join or synchronize with other profiles.</span>
                     </div>
-                  )}
+                  ) : syncMode === 'solar_system' && allAvailableGroups.length > 0 ? (
+                    <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                      <span className="text-[10px] text-zinc-500 font-medium">Quick Join:</span>
+                      {allAvailableGroups.slice(0, 8).map((g) => {
+                        const isSelected = tag.trim().toLowerCase() === g.name.toLowerCase();
+                        return (
+                          <button
+                            key={g.name}
+                            type="button"
+                            onClick={() => {
+                              setTag(g.name);
+                              setIsUserTypingCategory(false);
+                              setIsCategoryDropdownOpen(false);
+                            }}
+                            className={`text-[10.5px] px-2 py-0.5 rounded border transition cursor-pointer flex items-center gap-1 ${
+                              isSelected
+                                ? 'bg-blue-950/60 border-blue-500/80 text-blue-300 font-medium shadow-xs'
+                                : 'bg-[#15171D] border-[#252834] text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'
+                            }`}
+                          >
+                            <span>{g.name}</span>
+                            {g.instanceCount > 0 && (
+                              <span className="text-[9px] px-1 py-0.2 rounded-full bg-zinc-800/80 text-zinc-400 font-mono">
+                                {g.instanceCount}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
@@ -802,7 +1130,7 @@ export function InstanceModal({
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                   {/* Option 1: Solo System Orbit */}
                   <div
-                    onClick={() => setSyncMode('solo')}
+                    onClick={() => handleSelectSyncMode('solo')}
                     className={`p-3 rounded-xl border cursor-pointer transition flex flex-col justify-between ${
                       syncMode === 'solo'
                         ? 'bg-[#151824] border-blue-500/70 shadow-xs ring-1 ring-blue-500/30'
@@ -833,7 +1161,7 @@ export function InstanceModal({
 
                   {/* Option 2: Gravitate to Solar System */}
                   <div
-                    onClick={() => setSyncMode('solar_system')}
+                    onClick={() => handleSelectSyncMode('solar_system')}
                     className={`p-3 rounded-xl border cursor-pointer transition flex flex-col justify-between ${
                       syncMode === 'solar_system'
                         ? 'bg-[#121E1B] border-emerald-500/70 shadow-xs ring-1 ring-emerald-500/30'
@@ -868,7 +1196,7 @@ export function InstanceModal({
 
                   {/* Option 3: The Black Hole Tether */}
                   <div
-                    onClick={() => setSyncMode('black_hole')}
+                    onClick={() => handleSelectSyncMode('black_hole')}
                     className={`p-3 rounded-xl border cursor-pointer transition flex flex-col justify-between ${
                       syncMode === 'black_hole'
                         ? 'bg-[#1D1728] border-purple-500/70 shadow-xs ring-1 ring-purple-500/30'
@@ -1114,9 +1442,19 @@ export function InstanceModal({
 
               <button
                 type="submit"
-                className="px-4 py-1.5 bg-[#1A56DB] hover:bg-[#1E62F0] text-white rounded text-xs font-medium transition cursor-pointer"
+                disabled={isSubmitting || isDuplicateName || hasTagError || !trimmedName || !currentTagTrimmed}
+                className="px-4 py-1.5 bg-[#1A56DB] hover:bg-[#1E62F0] disabled:opacity-40 disabled:cursor-not-allowed text-white rounded text-xs font-medium transition cursor-pointer flex items-center gap-1.5"
               >
-                {isEditing ? 'Save Settings' : 'Create Profile'}
+                {isSubmitting && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                <span>
+                  {isSubmitting
+                    ? isEditing
+                      ? 'Saving...'
+                      : 'Creating...'
+                    : isEditing
+                    ? 'Save Settings'
+                    : 'Create Profile'}
+                </span>
               </button>
             </div>
           </div>

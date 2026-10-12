@@ -12,6 +12,26 @@ pub struct ConversationInfo {
     pub step_count: i64,
     pub last_modified: String,
     pub source_name: String,
+    #[serde(default)]
+    pub profile_dir: Option<String>,
+}
+
+/// Resolves the Solar System category/group name for an instance.
+/// Prioritizes instance.tag, falling back to non-default parent folder name, and finally "General Workspaces".
+pub fn get_instance_solar_group(inst: &Instance) -> String {
+    if let Some(ref t) = inst.tag {
+        let trimmed = t.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+    if let Some(parent) = Path::new(&inst.profile_dir).parent() {
+        let parent_name = parent.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if parent_name.to_lowercase() != "antigravityprofiles" && !parent_name.is_empty() {
+            return parent_name.to_string();
+        }
+    }
+    "Projects".to_string()
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -433,7 +453,14 @@ pub fn list_conversations_for_source(
             .unwrap_or_else(|| PathBuf::from("."));
         home.join(".gemini")
     } else if let Some(p) = profile_dir {
-        PathBuf::from(p).join(".gemini")
+        let pb = PathBuf::from(p);
+        if pb.join(".gemini").exists() {
+            pb.join(".gemini")
+        } else if pb.join("antigravity").exists() || pb.join("antigravity-ide").exists() {
+            pb
+        } else {
+            pb.join(".gemini")
+        }
     } else {
         PathBuf::from(".gemini")
     };
@@ -502,6 +529,7 @@ except Exception as e:
                                 step_count,
                                 last_modified,
                                 source_name: source_name.to_string(),
+                                profile_dir: profile_dir.map(|s| s.to_string()),
                             });
                         }
                     }
@@ -554,6 +582,7 @@ except Exception as e:
                                     step_count,
                                     last_modified,
                                     source_name: source_name.to_string(),
+                                    profile_dir: profile_dir.map(|s| s.to_string()),
                                 });
                             }
                         }
@@ -1129,13 +1158,7 @@ pub fn sync_instance_with_master_brain(instance: &Instance) -> Result<String, St
             ))
         }
         "solar_system" => {
-            let mut group_key = "General".to_string();
-            if let Some(parent) = Path::new(&instance.profile_dir).parent() {
-                let parent_name = parent.file_name().and_then(|n| n.to_str()).unwrap_or("");
-                if parent_name.to_lowercase() != "antigravityprofiles" && !parent_name.is_empty() {
-                    group_key = parent_name.to_string();
-                }
-            }
+            let group_key = get_instance_solar_group(instance);
             let clean_slug: String = group_key.chars()
                 .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
                 .collect();
@@ -1239,13 +1262,7 @@ pub fn sync_solar_system_fleet(group_name: &str, all_instances: &[Instance]) -> 
             let is_solo = inst.sync_mode.as_deref() == Some("solo");
             if is_bh || is_solo { return false; }
 
-            let mut g = "General".to_string();
-            if let Some(parent) = Path::new(&inst.profile_dir).parent() {
-                let p_name = parent.file_name().and_then(|n| n.to_str()).unwrap_or("");
-                if p_name.to_lowercase() != "antigravityprofiles" && !p_name.is_empty() {
-                    g = p_name.to_string();
-                }
-            }
+            let g = get_instance_solar_group(inst);
             g.eq_ignore_ascii_case(group_name)
         })
         .collect();
@@ -1290,13 +1307,7 @@ pub fn sync_all_shared_brains(instances: &[Instance]) -> Result<(), String> {
         let is_bh = inst.blackhole_sync == Some(true) || inst.sync_mode.as_deref() == Some("black_hole");
         let is_solo = inst.sync_mode.as_deref() == Some("solo");
         if !is_bh && !is_solo {
-            let mut g = "General".to_string();
-            if let Some(parent) = Path::new(&inst.profile_dir).parent() {
-                let p_name = parent.file_name().and_then(|n| n.to_str()).unwrap_or("");
-                if p_name.to_lowercase() != "antigravityprofiles" && !p_name.is_empty() {
-                    g = p_name.to_string();
-                }
-            }
+            let g = get_instance_solar_group(inst);
             groups.insert(g);
         }
     }
@@ -1334,26 +1345,14 @@ pub fn get_instance_shared_brain_status(instance: &Instance, all_instances: &[In
         };
     }
 
-    let mut group_key = "General".to_string();
-    if let Some(parent) = Path::new(&instance.profile_dir).parent() {
-        let parent_name = parent.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        if parent_name.to_lowercase() != "antigravityprofiles" && !parent_name.is_empty() {
-            group_key = parent_name.to_string();
-        }
-    }
+    let group_key = get_instance_solar_group(instance);
 
     let members: Vec<String> = all_instances.iter()
         .filter(|i| {
             if i.blackhole_sync == Some(true) || i.sync_mode.as_deref() == Some("black_hole") || i.sync_mode.as_deref() == Some("solo") {
                 return false;
             }
-            let mut i_group = "General".to_string();
-            if let Some(parent) = Path::new(&i.profile_dir).parent() {
-                let parent_name = parent.file_name().and_then(|n| n.to_str()).unwrap_or("");
-                if parent_name.to_lowercase() != "antigravityprofiles" && !parent_name.is_empty() {
-                    i_group = parent_name.to_string();
-                }
-            }
+            let i_group = get_instance_solar_group(i);
             i_group.to_lowercase() == group_key.to_lowercase()
         })
         .map(|i| i.name.clone())
@@ -1511,7 +1510,7 @@ pub fn delete_conversation_record(
 
     // If requested, also purge from the category's shared brain
     if delete_from_shared_brain {
-        let mut group_key = "General".to_string();
+        let mut group_key = "Projects".to_string();
         if let Some(parent) = Path::new(p_dir).parent() {
             let parent_name = parent.file_name().and_then(|n| n.to_str()).unwrap_or("");
             if parent_name.to_lowercase() != "antigravityprofiles" && !parent_name.is_empty() {
@@ -1533,5 +1532,112 @@ pub fn delete_conversation_record(
     }
 
     Ok(true)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TranscriptStep {
+    pub step_index: i64,
+    pub source: String,
+    pub step_type: String,
+    pub content: String,
+    pub thinking: Option<String>,
+    pub tool_calls: Vec<String>,
+    pub created_at: Option<String>,
+}
+
+/// Reads and extracts transcript steps for a conversation from brain logs.
+pub fn read_conversation_transcript(
+    conversation_id: &str,
+    profile_dir: Option<&str>,
+    is_global: bool,
+    _app_type: &str,
+) -> Vec<TranscriptStep> {
+    let mut candidate_paths = Vec::new();
+
+    // 1. Global directories
+    if is_global || profile_dir.is_none() {
+        if let Some(home) = dirs::home_dir().or_else(|| std::env::var("USERPROFILE").ok().map(PathBuf::from)) {
+            let gemini = home.join(".gemini");
+            candidate_paths.push(gemini.join("antigravity").join("brain").join(conversation_id).join(".system_generated").join("logs").join("transcript.jsonl"));
+            candidate_paths.push(gemini.join("antigravity-ide").join("brain").join(conversation_id).join(".system_generated").join("logs").join("transcript.jsonl"));
+        }
+    }
+
+    // 2. Profile dir if specified
+    if let Some(p) = profile_dir {
+        let pbuf = PathBuf::from(p);
+        candidate_paths.push(pbuf.join(".gemini").join("antigravity").join("brain").join(conversation_id).join(".system_generated").join("logs").join("transcript.jsonl"));
+        candidate_paths.push(pbuf.join(".gemini").join("antigravity-ide").join("brain").join(conversation_id).join(".system_generated").join("logs").join("transcript.jsonl"));
+        candidate_paths.push(pbuf.join("brain").join(conversation_id).join(".system_generated").join("logs").join("transcript.jsonl"));
+        candidate_paths.push(pbuf.join("antigravity").join("brain").join(conversation_id).join(".system_generated").join("logs").join("transcript.jsonl"));
+        candidate_paths.push(pbuf.join("antigravity-ide").join("brain").join(conversation_id).join(".system_generated").join("logs").join("transcript.jsonl"));
+    }
+
+    // 3. Check shared brains
+    let shared_brains = get_shared_brains_base_dir();
+    if shared_brains.exists() {
+        if let Ok(entries) = std::fs::read_dir(&shared_brains) {
+            for entry in entries.flatten() {
+                if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+                    candidate_paths.push(entry.path().join("antigravity").join("brain").join(conversation_id).join(".system_generated").join("logs").join("transcript.jsonl"));
+                    candidate_paths.push(entry.path().join("antigravity-ide").join("brain").join(conversation_id).join(".system_generated").join("logs").join("transcript.jsonl"));
+                }
+            }
+        }
+    }
+
+    // Find the first existing transcript file
+    let transcript_file = match candidate_paths.into_iter().find(|p| p.exists() && p.is_file()) {
+        Some(p) => p,
+        None => return Vec::new(),
+    };
+
+    let content = match std::fs::read_to_string(&transcript_file) {
+        Ok(c) => c,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut steps = Vec::new();
+    for (idx, line) in content.lines().filter(|l| !l.trim().is_empty()).enumerate() {
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
+            let step_idx = val.get("step_index").and_then(|v| v.as_i64()).unwrap_or(idx as i64);
+            let source = val.get("source").and_then(|v| v.as_str()).unwrap_or("UNKNOWN").to_string();
+            let step_type = val.get("type").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let created_at = val.get("created_at").and_then(|v| v.as_str()).map(|s| s.to_string());
+            let thinking = val.get("thinking").and_then(|v| v.as_str()).map(|s| s.to_string());
+
+            let mut tool_calls = Vec::new();
+            if let Some(tc_array) = val.get("tool_calls").and_then(|v| v.as_array()) {
+                for tc in tc_array {
+                    if let Some(tname) = tc.get("name").and_then(|v| v.as_str()) {
+                        tool_calls.push(tname.to_string());
+                    }
+                }
+            }
+
+            let raw_content = val.get("content").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let clean_content = raw_content
+                .replace("<USER_REQUEST>", "")
+                .replace("</USER_REQUEST>", "")
+                .replace("<ADDITIONAL_METADATA>", "")
+                .replace("</ADDITIONAL_METADATA>", "")
+                .replace("<USER_SETTINGS_CHANGE>", "")
+                .replace("</USER_SETTINGS_CHANGE>", "")
+                .trim()
+                .to_string();
+
+            steps.push(TranscriptStep {
+                step_index: step_idx,
+                source,
+                step_type,
+                content: clean_content,
+                thinking,
+                tool_calls,
+                created_at,
+            });
+        }
+    }
+
+    steps
 }
 

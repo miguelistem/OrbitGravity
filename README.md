@@ -11,7 +11,7 @@
 [![Rust Backend](https://img.shields.io/badge/Rust-2024%20Edition-black?logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Tauri v2](https://img.shields.io/badge/Tauri-v2.12-24C8D8?logo=tauri&logoColor=white)](https://tauri.app/)
 [![React 19](https://img.shields.io/badge/Frontend-React%2019%20%2B%20Tailwind-61DAFB?logo=react&logoColor=black)](https://react.dev/)
-[![Tests](https://img.shields.io/badge/Tests-35%2F35%20Passed-34D399?logo=checkmarx&logoColor=white)](./INDEPTH_README.md)
+[![Tests](https://img.shields.io/badge/Tests-42%2F42%20Passed-34D399?logo=checkmarx&logoColor=white)](./INDEPTH_README.md)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 [**Quick Start**](#-quick-start) • [**Features**](#-key-features) • [**User Guide**](#-user-guide--how-to-use) • [**Caveats**](#-important-caveats--known-limitations) • [**Deep-Dive Docs**](./INDEPTH_README.md)
@@ -138,35 +138,51 @@ Please review these key requirements before using OrbitGravity:
 
 ---
 
-## ⚡ Quick Start
+## ⚡ Installation & Quick Start
 
-### Prerequisites
+### For Users (No Coding Required)
+
+Choose any of the three distribution channels:
+
+| Method | Best For | Description |
+| :--- | :--- | :--- |
+| **[One-Click Setup (`.exe`)](https://github.com/orbitgravity/orbitgravity/releases/latest)** | **Recommended** | Double-click installer. Installs to user space with **zero Administrator rights** and creates a Desktop shortcut automatically. |
+| **[Portable Archive (`.zip`)](https://github.com/orbitgravity/orbitgravity/releases/latest)** | Zero-Install / USB | Standalone `OrbitGravity.exe`. Unzip and run from any folder or external drive. |
+| **PowerShell One-Liner** | Terminal Users | Run in PowerShell: `irm https://raw.githubusercontent.com/orbitgravity/orbitgravity/main/scripts/install.ps1 \| iex` |
+
+> [!NOTE]
+> **Windows SmartScreen Notice**:  
+> Because OrbitGravity is an open-source project without a paid corporate EV certificate, Microsoft Defender SmartScreen may display *"Windows protected your PC"*. Simply click **More info** → **Run anyway**. All source code is 100% open, verified, and passes 42 automated tests.
+
+---
+
+### For Developers (Building from Source)
+
+#### Prerequisites
 - **Windows 10 or 11** (64-bit)
 - [Node.js 18+](https://nodejs.org/) (tested with v20 and v25)
 - [Rust & Cargo](https://rustup.rs/) (stable toolchain)
 - Google Antigravity or Antigravity IDE installed on your system
 
-### 1. Clone & Install
+#### 1. Clone & Install
 ```powershell
-git clone https://github.com/your-username/orbitgravity.git
+git clone https://github.com/orbitgravity/orbitgravity.git
 cd orbitgravity
 npm install
 ```
 
-### 2. Run in Development Mode
+#### 2. Run in Development Mode
 To launch the native Windows desktop application with live reload:
 ```powershell
 npm run tauri dev
 ```
 
-*(Optional: To run only the Vite React UI in your browser with mock IPC data, run `npm run dev`)*
-
-### 3. Build Production Executable
-To package a standalone, highly-optimized Windows `.exe`:
+#### 3. Build Production Installer & Release Assets
+To compile the optimized release binary and package the one-click NSIS installer:
 ```powershell
-npm run tauri build
+powershell -ExecutionPolicy Bypass -File scripts/build-release.ps1
 ```
-The compiled installer and standalone binary will be generated inside `src-tauri/target/release/`.
+All release artifacts (One-Click Installer `.exe`, Portable `.zip`, and SHA256 checksums) will be generated inside `release/`.
 
 ---
 

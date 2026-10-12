@@ -3,7 +3,7 @@ use app_lib::junction::{create_junction, remove_junction, setup_profile_director
 use app_lib::shortcut::{create_windows_shortcut, create_instance_desktop_shortcut};
 use app_lib::storage::{get_seed_data, sync_account_stats};
 use app_lib::telemetry::calculate_storage_saved_mb;
-use app_lib::models::Instance;
+use app_lib::models::{Instance, FleetState};
 
 #[test]
 fn test_antigravity_binary_detection() {
@@ -62,6 +62,7 @@ fn test_seed_data_and_stat_sync() {
     state.instances.push(Instance {
         id: "test-inst-1".to_string(),
         name: "Test Instance 1".to_string(),
+        tag: Some("Projects".to_string()),
         account_id: "acc-1".to_string(),
         mode: "auth-only".to_string(),
         port: 9100,
@@ -77,10 +78,12 @@ fn test_seed_data_and_stat_sync() {
         app_type: Some("antigravity_ide".to_string()),
         blackhole_sync: None,
         sync_mode: Some("solar_system".to_string()),
+        tier: Some("Pro".to_string()),
     });
     state.instances.push(Instance {
         id: "test-inst-2".to_string(),
         name: "Test Instance 2".to_string(),
+        tag: Some("Projects".to_string()),
         account_id: "acc-1".to_string(),
         mode: "auth-only".to_string(),
         port: 9101,
@@ -96,6 +99,7 @@ fn test_seed_data_and_stat_sync() {
         app_type: Some("antigravity_ide".to_string()),
         blackhole_sync: None,
         sync_mode: Some("solar_system".to_string()),
+        tier: Some("Pro".to_string()),
     });
 
     sync_account_stats(&mut state);
@@ -213,6 +217,7 @@ fn test_instance_desktop_shortcut_with_bat() {
         let test_instance = Instance {
             id: "test-sc-id".to_string(),
             name: "TestInstance".to_string(),
+            tag: None,
             account_id: "acc-1".to_string(),
             mode: "auth-only".to_string(),
             port: 9999,
@@ -228,6 +233,7 @@ fn test_instance_desktop_shortcut_with_bat() {
             app_type: Some("antigravity_ide".to_string()),
             blackhole_sync: None,
             sync_mode: None,
+            tier: None,
         };
 
         let res = create_instance_desktop_shortcut(&test_instance, &binary, None);
@@ -302,6 +308,7 @@ fn test_blackhole_attachment_and_detachment() {
     let inst = Instance {
         id: "test-bh-inst".to_string(),
         name: "BlackHole Tester".to_string(),
+        tag: None,
         account_id: "acc-1".to_string(),
         mode: "auth-only".to_string(),
         port: 3000,
@@ -317,6 +324,7 @@ fn test_blackhole_attachment_and_detachment() {
         app_type: Some("antigravity_ide".to_string()),
         blackhole_sync: Some(true),
         sync_mode: Some("black_hole".to_string()),
+        tier: None,
     };
 
     let attach_res = app_lib::conversations::attach_instance_to_blackhole(&inst);
@@ -345,6 +353,7 @@ fn test_sync_instance_on_session_start_blackhole() {
     let inst = Instance {
         id: "test-launch-sync-id".to_string(),
         name: "TestSyncInst".to_string(),
+        tag: None,
         account_id: "acc-1".to_string(),
         mode: "auth-only".to_string(),
         port: 9998,
@@ -360,6 +369,7 @@ fn test_sync_instance_on_session_start_blackhole() {
         app_type: Some("antigravity".to_string()),
         blackhole_sync: Some(true),
         sync_mode: Some("black_hole".to_string()),
+        tier: None,
     };
 
     let sync_res = app_lib::conversations::sync_instance_on_session_start(&inst);
@@ -492,6 +502,7 @@ fn test_concurrency_guard_mutual_exclusion() {
     let inst_bh_1 = Instance {
         id: "inst-bh-1".to_string(),
         name: "BlackHole 1".to_string(),
+        tag: None,
         account_id: "acc-1".to_string(),
         mode: "auth-only".to_string(),
         port: 3001,
@@ -507,11 +518,13 @@ fn test_concurrency_guard_mutual_exclusion() {
         app_type: Some("antigravity_ide".to_string()),
         blackhole_sync: Some(true),
         sync_mode: Some("black_hole".to_string()),
+        tier: None,
     };
 
     let inst_bh_2 = Instance {
         id: "inst-bh-2".to_string(),
         name: "BlackHole 2".to_string(),
+        tag: None,
         account_id: "acc-1".to_string(),
         mode: "auth-only".to_string(),
         port: 3002,
@@ -527,6 +540,7 @@ fn test_concurrency_guard_mutual_exclusion() {
         app_type: Some("antigravity_ide".to_string()),
         blackhole_sync: Some(true),
         sync_mode: Some("black_hole".to_string()),
+        tier: None,
     };
 
     // BH 1 is running -> Launching BH 2 must fail due to mutual exclusion
@@ -538,6 +552,7 @@ fn test_concurrency_guard_mutual_exclusion() {
     let inst_sol_ide_1 = Instance {
         id: "inst-sol-1".to_string(),
         name: "Solar Project IDE 1".to_string(),
+        tag: None,
         account_id: "acc-1".to_string(),
         mode: "auth-only".to_string(),
         port: 3003,
@@ -553,11 +568,13 @@ fn test_concurrency_guard_mutual_exclusion() {
         app_type: Some("antigravity_ide".to_string()),
         blackhole_sync: Some(false),
         sync_mode: Some("solar_system".to_string()),
+        tier: None,
     };
 
     let inst_sol_ide_2 = Instance {
         id: "inst-sol-2".to_string(),
         name: "Solar Project IDE 2".to_string(),
+        tag: None,
         account_id: "acc-1".to_string(),
         mode: "auth-only".to_string(),
         port: 3004,
@@ -573,6 +590,7 @@ fn test_concurrency_guard_mutual_exclusion() {
         app_type: Some("antigravity_ide".to_string()),
         blackhole_sync: Some(false),
         sync_mode: Some("solar_system".to_string()),
+        tier: None,
     };
 
     // Both are IDE in ProjectAlpha: launching IDE 2 while IDE 1 is running must fail
@@ -584,6 +602,7 @@ fn test_concurrency_guard_mutual_exclusion() {
     let inst_sol_desktop = Instance {
         id: "inst-sol-desktop".to_string(),
         name: "Solar Project Desktop".to_string(),
+        tag: None,
         account_id: "acc-1".to_string(),
         mode: "auth-only".to_string(),
         port: 3005,
@@ -599,6 +618,7 @@ fn test_concurrency_guard_mutual_exclusion() {
         app_type: Some("antigravity".to_string()),
         blackhole_sync: Some(false),
         sync_mode: Some("solar_system".to_string()),
+        tier: None,
     };
 
     let sol_guard_diff = app_lib::process::check_launch_concurrency_guard(&inst_sol_desktop, &[inst_sol_ide_1.clone(), inst_sol_desktop.clone()]);
@@ -718,6 +738,7 @@ fn test_tracked_pids_concurrency_guard() {
     let inst_bh = Instance {
         id: "inst-bh-tracked".to_string(),
         name: "Tracked Black Hole".to_string(),
+        tag: None,
         account_id: "acc-1".to_string(),
         mode: "auth-only".to_string(),
         port: 3009,
@@ -733,6 +754,7 @@ fn test_tracked_pids_concurrency_guard() {
         app_type: Some("antigravity".to_string()),
         blackhole_sync: Some(true),
         sync_mode: Some("black_hole".to_string()),
+        tier: None,
     };
 
     // When current_pid is in tracked_parent_pids (known alive process): mutual exclusion MUST block launch!
@@ -839,6 +861,7 @@ fn test_solar_system_convergent_sync_propagates_to_all_members() {
         Instance {
             id: "i-1".to_string(),
             name: "Instance 1".to_string(),
+            tag: None,
             account_id: "acc-1".to_string(),
             mode: "auth-only".to_string(),
             port: 3001,
@@ -854,10 +877,12 @@ fn test_solar_system_convergent_sync_propagates_to_all_members() {
             app_type: Some("antigravity".to_string()),
             blackhole_sync: Some(false),
             sync_mode: Some("solar_system".to_string()),
+            tier: None,
         },
         Instance {
             id: "i-2".to_string(),
             name: "Instance 2".to_string(),
+            tag: None,
             account_id: "acc-1".to_string(),
             mode: "auth-only".to_string(),
             port: 3002,
@@ -873,6 +898,7 @@ fn test_solar_system_convergent_sync_propagates_to_all_members() {
             app_type: Some("antigravity".to_string()),
             blackhole_sync: Some(false),
             sync_mode: Some("solar_system".to_string()),
+            tier: None,
         },
     ];
 
@@ -989,6 +1015,7 @@ fn test_antigravity_app_filtering_ignores_ide() {
     let ide_inst = Instance {
         id: "inst-ide-1".to_string(),
         name: "My IDE".to_string(),
+        tag: None,
         account_id: "acc-1".to_string(),
         mode: "auth-only".to_string(),
         port: 3001,
@@ -1004,6 +1031,7 @@ fn test_antigravity_app_filtering_ignores_ide() {
         app_type: Some("antigravity_ide".to_string()),
         blackhole_sync: None,
         sync_mode: None,
+        tier: None,
     };
 
     let list = vec![ide_inst];
@@ -1012,6 +1040,59 @@ fn test_antigravity_app_filtering_ignores_ide() {
     for res in results {
         assert_ne!(res.instance_id, "inst-ide-1", "IDE instance must be strictly excluded from quota monitor");
     }
+}
+
+#[test]
+fn test_solar_system_star_naming_with_tags() {
+    let inst_tagged = Instance {
+        id: "inst-portfolio".to_string(),
+        name: "Portfolio Spec Agent".to_string(),
+        tag: Some("Portfolio Website".to_string()),
+        account_id: "acc-1".to_string(),
+        mode: "auth-only".to_string(),
+        port: 9110,
+        status: "stopped".to_string(),
+        tokens_str: "0.0M tokens".to_string(),
+        workspace_path: None,
+        profile_dir: "C:\\Users\\User\\AntigravityProfiles\\PortfolioSpec".to_string(),
+        pid: None,
+        last_used: "Never".to_string(),
+        binary_path: None,
+        custom_flags: None,
+        env_vars: None,
+        app_type: Some("antigravity_ide".to_string()),
+        blackhole_sync: None,
+        sync_mode: Some("solar_system".to_string()),
+        tier: None,
+    };
+
+    let group = app_lib::conversations::get_instance_solar_group(&inst_tagged);
+    assert_eq!(group, "Portfolio Website", "Star name must match instance tag instead of defaulting to General");
+
+    let inst_untagged = Instance {
+        id: "inst-general".to_string(),
+        name: "Standard Instance".to_string(),
+        tag: None,
+        account_id: "acc-1".to_string(),
+        mode: "auth-only".to_string(),
+        port: 9111,
+        status: "stopped".to_string(),
+        tokens_str: "0.0M tokens".to_string(),
+        workspace_path: None,
+        profile_dir: "C:\\Users\\User\\AntigravityProfiles\\GeneralInstance".to_string(),
+        pid: None,
+        last_used: "Never".to_string(),
+        binary_path: None,
+        custom_flags: None,
+        env_vars: None,
+        app_type: Some("antigravity_ide".to_string()),
+        blackhole_sync: None,
+        sync_mode: Some("solar_system".to_string()),
+        tier: None,
+    };
+
+    let fallback_group = app_lib::conversations::get_instance_solar_group(&inst_untagged);
+    assert_eq!(fallback_group, "Projects", "Untagged directly under AntigravityProfiles defaults to Projects");
 }
 
 #[test]
@@ -1046,5 +1127,582 @@ fn test_profile_directory_setup_with_spaces() {
     let _ = app_lib::junction::remove_junction(&temp_root.join("extensions"));
     let _ = std::fs::remove_dir_all(&temp_root);
 }
+
+#[test]
+fn test_read_conversation_transcript() {
+    let temp_root = std::env::temp_dir().join(format!("bm_transcript_test_{}", uuid::Uuid::new_v4()));
+    let conv_id = "test-conv-uuid-1234";
+    let logs_dir = temp_root.join("brain").join(conv_id).join(".system_generated").join("logs");
+    std::fs::create_dir_all(&logs_dir).expect("create logs dir");
+
+    let sample_jsonl = r#"{"step_index":0,"source":"USER_EXPLICIT","type":"USER_INPUT","status":"DONE","created_at":"2026-10-12T10:00:00Z","content":"<USER_REQUEST>Build a rocket</USER_REQUEST>"}
+{"step_index":1,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","created_at":"2026-10-12T10:00:05Z","thinking":"Planning propulsion","tool_calls":[{"name":"ignite_engine","args":{}}],"content":"Engines primed and ready."}
+"#;
+
+    std::fs::write(logs_dir.join("transcript.jsonl"), sample_jsonl).expect("write sample jsonl");
+
+    let steps = app_lib::conversations::read_conversation_transcript(
+        conv_id,
+        Some(&temp_root.to_string_lossy()),
+        false,
+        "antigravity_ide",
+    );
+
+    assert_eq!(steps.len(), 2, "Must parse 2 transcript steps");
+    assert_eq!(steps[0].step_index, 0);
+    assert_eq!(steps[0].content, "Build a rocket");
+    assert_eq!(steps[1].step_index, 1);
+    assert_eq!(steps[1].content, "Engines primed and ready.");
+    assert_eq!(steps[1].tool_calls, vec!["ignite_engine".to_string()]);
+
+    let _ = std::fs::remove_dir_all(&temp_root);
+}
+
+#[test]
+fn test_instance_creation_and_deletion_lifecycle_with_file_verification() {
+    let test_run_id = uuid::Uuid::new_v4().to_string();
+    let temp_storage_dir = std::env::temp_dir().join(format!("bm_lifecycle_storage_{}", &test_run_id[..8]));
+    let temp_profiles_base = std::env::temp_dir().join(format!("bm_lifecycle_profiles_{}", &test_run_id[..8]));
+    let _ = std::fs::create_dir_all(&temp_storage_dir);
+    let _ = std::fs::create_dir_all(&temp_profiles_base);
+
+    let test_state_file = temp_storage_dir.join("fleet_state.json");
+    let instance_id = format!("inst-lifecycle-{}", &test_run_id[..8]);
+    let instance_name = "Lifecycle Verifier Instance".to_string();
+    let profile_dir = temp_profiles_base.join("LifecycleVerifier");
+
+    // ==========================================
+    // PHASE 1: CREATE INSTANCE & SETUP DIRECTORIES
+    // ==========================================
+    let setup_res = app_lib::junction::setup_profile_directories(&profile_dir, "auth-only");
+    assert!(setup_res.is_ok(), "Setting up profile directories with NTFS junctions must succeed: {:?}", setup_res);
+
+    // Verify on-disk profile structure created
+    assert!(profile_dir.exists(), "Profile directory must exist on disk after creation");
+    assert!(profile_dir.join("data").exists(), "Profile data directory must exist on disk");
+    assert!(profile_dir.join("extensions").exists(), "Profile extensions junction link must exist on disk");
+    assert!(profile_dir.join("appdata").join("Roaming").exists(), "Profile appdata Roaming must exist");
+    assert!(profile_dir.join("appdata").join("Local").exists(), "Profile appdata Local must exist");
+
+    let test_instance = Instance {
+        id: instance_id.clone(),
+        name: instance_name.clone(),
+        tag: Some("Test Cluster".to_string()),
+        account_id: "acc-1".to_string(),
+        mode: "auth-only".to_string(),
+        port: 9876,
+        status: "stopped".to_string(),
+        tokens_str: "0.0M tokens".to_string(),
+        workspace_path: Some(profile_dir.to_string_lossy().to_string()),
+        profile_dir: profile_dir.to_string_lossy().to_string(),
+        pid: None,
+        last_used: "Just created".to_string(),
+        binary_path: None,
+        custom_flags: Some("--test-lifecycle-flag".to_string()),
+        env_vars: None,
+        app_type: Some("antigravity_ide".to_string()),
+        blackhole_sync: None,
+        sync_mode: Some("solar_system".to_string()),
+        tier: Some("Pro".to_string()),
+    };
+
+    // Create launch.bat in profile directory
+    let binary = app_lib::detector::detect_antigravity_binary().unwrap_or_else(|| std::path::PathBuf::from("antigravity.exe"));
+    let sc_res = app_lib::shortcut::create_instance_desktop_shortcut(&test_instance, &binary, None);
+    assert!(sc_res.is_ok(), "Creating launch script for instance should succeed");
+    assert!(profile_dir.join("launch.bat").exists(), "launch.bat must exist inside profile dir");
+
+    // Build FleetState and write to fleet_state.json file
+    let mut initial_fleet = app_lib::storage::get_seed_data();
+    initial_fleet.instances.push(test_instance.clone());
+    app_lib::storage::sync_account_stats(&mut initial_fleet);
+
+    let json_bytes = serde_json::to_string_pretty(&initial_fleet).expect("serialize fleet state to json");
+    std::fs::write(&test_state_file, &json_bytes).expect("write fleet_state.json to disk");
+
+    // ==========================================
+    // PHASE 2: VERIFY FILE CONTENT (CREATION)
+    // ==========================================
+    assert!(test_state_file.exists(), "fleet_state.json file must exist on disk");
+    let file_content = std::fs::read_to_string(&test_state_file).expect("read fleet_state.json");
+    let read_fleet: FleetState = serde_json::from_str(&file_content).expect("parse fleet_state.json");
+
+    let found_in_file = read_fleet.instances.iter().find(|i| i.id == instance_id);
+    assert!(found_in_file.is_some(), "The newly created instance must be present in fleet_state.json");
+
+    let persisted = found_in_file.unwrap();
+    assert_eq!(persisted.name, instance_name);
+    assert_eq!(persisted.tier, Some("Pro".to_string()));
+    assert_eq!(persisted.port, 9876);
+    assert_eq!(persisted.profile_dir, profile_dir.to_string_lossy().to_string());
+
+    // ==========================================
+    // PHASE 3: DELETE INSTANCE & PERFORM CLEANUP
+    // ==========================================
+    let mut fleet_to_modify = read_fleet;
+    let pos = fleet_to_modify.instances.iter().position(|i| i.id == instance_id);
+    assert!(pos.is_some(), "Instance must be located for deletion");
+
+    let inst_to_delete = fleet_to_modify.instances.remove(pos.unwrap());
+
+    // 1. Safely unlink NTFS junctions
+    let p_path = std::path::Path::new(&inst_to_delete.profile_dir);
+    let _ = app_lib::junction::remove_junction(&p_path.join("extensions"));
+    let _ = app_lib::junction::remove_junction(&p_path.join("Desktop"));
+    let _ = app_lib::junction::remove_junction(&p_path.join("Documents"));
+    let _ = app_lib::junction::remove_junction(&p_path.join("Downloads"));
+    let _ = app_lib::junction::remove_junction(&p_path.join(".gemini").join("config"));
+
+    // 2. Remove desktop shortcut if created
+    let shortcut_path = app_lib::shortcut::get_shortcut_destination(&inst_to_delete.name, None);
+    if shortcut_path.exists() {
+        let _ = std::fs::remove_file(&shortcut_path);
+    }
+
+    // 3. Delete profile directory from disk
+    if p_path.exists() {
+        let _ = std::fs::remove_dir_all(p_path);
+    }
+
+    // 4. Update fleet_state.json on disk
+    app_lib::storage::sync_account_stats(&mut fleet_to_modify);
+    let updated_json = serde_json::to_string_pretty(&fleet_to_modify).expect("serialize updated fleet");
+    std::fs::write(&test_state_file, &updated_json).expect("write updated fleet_state.json");
+
+    // ==========================================
+    // PHASE 4: VERIFY FILE CONTENT & DISK (DELETION)
+    // ==========================================
+    // Check 1: Verify fleet_state.json on disk no longer contains instance
+    let updated_content = std::fs::read_to_string(&test_state_file).expect("read updated fleet_state.json");
+    let verify_fleet: FleetState = serde_json::from_str(&updated_content).expect("parse updated fleet_state.json");
+
+    let still_exists_in_file = verify_fleet.instances.iter().any(|i| i.id == instance_id);
+    assert!(!still_exists_in_file, "Instance must be completely removed from fleet_state.json file!");
+
+    // Also assert raw JSON string does not contain the unique instance ID
+    assert!(!updated_content.contains(&instance_id), "fleet_state.json raw text must NOT contain instance ID");
+
+    // Check 2: Verify profile directory completely removed from disk
+    assert!(!profile_dir.exists(), "Profile directory must be erased from disk after deletion!");
+
+    // Check 3: Verify target system extensions dir is untouched
+    let system_ext = app_lib::detector::get_system_extensions_dir();
+    if system_ext.exists() {
+        assert!(system_ext.exists(), "Master system extensions directory must remain completely intact");
+    }
+
+    // Clean up temporary test files
+    let _ = std::fs::remove_dir_all(&temp_storage_dir);
+    let _ = std::fs::remove_dir_all(&temp_profiles_base);
+}
+
+#[test]
+fn test_real_fleet_storage_file_roundtrip() {
+    let test_inst_id = format!("test-roundtrip-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+    let storage_file = app_lib::storage::get_storage_path();
+
+    // 1. Load current fleet state from real storage path
+    let mut fleet = app_lib::storage::load_fleet_state();
+    let initial_count = fleet.instances.len();
+
+    // Ensure our test id does not already exist
+    assert!(!fleet.instances.iter().any(|i| i.id == test_inst_id));
+
+    // 2. Create test instance and temporary profile directory
+    let temp_prof = std::env::temp_dir().join(&test_inst_id);
+    let _ = app_lib::junction::setup_profile_directories(&temp_prof, "auth-only");
+
+    let new_inst = Instance {
+        id: test_inst_id.clone(),
+        name: format!("Live Test {}", test_inst_id),
+        tag: Some("Automated Testing".to_string()),
+        account_id: "acc-1".to_string(),
+        mode: "auth-only".to_string(),
+        port: 9955,
+        status: "stopped".to_string(),
+        tokens_str: "0.0M tokens".to_string(),
+        workspace_path: Some(temp_prof.to_string_lossy().to_string()),
+        profile_dir: temp_prof.to_string_lossy().to_string(),
+        pid: None,
+        last_used: "Just now".to_string(),
+        binary_path: None,
+        custom_flags: None,
+        env_vars: None,
+        app_type: Some("antigravity_ide".to_string()),
+        blackhole_sync: None,
+        sync_mode: Some("solar_system".to_string()),
+        tier: Some("Pro".to_string()),
+    };
+
+    fleet.instances.push(new_inst);
+    let save_res = app_lib::storage::save_fleet_state(&fleet);
+    assert!(save_res.is_ok(), "Saving to live fleet_state.json must succeed");
+
+    // 3. Inspect real fleet_state.json file on disk (Verification 1: Created)
+    assert!(storage_file.exists(), "fleet_state.json must exist at {:?}", storage_file);
+    let disk_content_after_create = std::fs::read_to_string(&storage_file).expect("read live fleet_state.json");
+    assert!(disk_content_after_create.contains(&test_inst_id), "fleet_state.json file must contain test instance ID after save");
+
+    let parsed_after_create: FleetState = serde_json::from_str(&disk_content_after_create).expect("parse fleet_state.json");
+    assert_eq!(parsed_after_create.instances.len(), initial_count + 1);
+    let created_item = parsed_after_create.instances.iter().find(|i| i.id == test_inst_id).expect("find created instance");
+    assert_eq!(created_item.tier, Some("Pro".to_string()));
+
+    // 4. Delete the test instance
+    let pos = fleet.instances.iter().position(|i| i.id == test_inst_id).expect("must find instance in memory");
+    let _removed = fleet.instances.remove(pos);
+
+    // Unlink junctions and clean up profile folder on disk
+    let _ = app_lib::junction::remove_junction(&temp_prof.join("extensions"));
+    let _ = std::fs::remove_dir_all(&temp_prof);
+
+    // Persist updated fleet state back to disk
+    let delete_save_res = app_lib::storage::save_fleet_state(&fleet);
+    assert!(delete_save_res.is_ok(), "Saving deleted fleet_state.json must succeed");
+
+    // 5. Inspect real fleet_state.json file on disk (Verification 2: Deleted)
+    let disk_content_after_delete = std::fs::read_to_string(&storage_file).expect("read live fleet_state.json after delete");
+    assert!(!disk_content_after_delete.contains(&test_inst_id), "fleet_state.json file must NOT contain test instance ID after deletion");
+
+    let parsed_after_delete: FleetState = serde_json::from_str(&disk_content_after_delete).expect("parse deleted fleet_state.json");
+    assert_eq!(parsed_after_delete.instances.len(), initial_count, "Fleet count must return to exact initial count");
+    assert!(!parsed_after_delete.instances.iter().any(|i| i.id == test_inst_id), "Instance must be completely absent from fleet_state.json");
+
+    // 6. Inspect profile directory on disk (Verification 3: Profile deleted)
+    assert!(!temp_prof.exists(), "Temporary profile directory must be deleted from disk");
+}
+
+#[test]
+fn test_duplicate_instance_name_rejected_case_insensitively() {
+    let fleet = app_lib::models::FleetState {
+        accounts: vec![],
+        instances: vec![
+            Instance {
+                id: "inst-existing-1".to_string(),
+                name: "Agent Matrix".to_string(),
+                tag: None,
+                account_id: "acc-1".to_string(),
+                mode: "auth-only".to_string(),
+                port: 9001,
+                status: "stopped".to_string(),
+                tokens_str: "0".to_string(),
+                workspace_path: None,
+                profile_dir: "C:\\Profiles\\AgentMatrix".to_string(),
+                pid: None,
+                last_used: "Never".to_string(),
+                binary_path: None,
+                custom_flags: None,
+                env_vars: None,
+                app_type: Some("antigravity_ide".to_string()),
+                blackhole_sync: None,
+                sync_mode: None,
+                tier: Some("Pro".to_string()),
+            },
+            Instance {
+                id: "inst-existing-2".to_string(),
+                name: "Data Scraper".to_string(),
+                tag: None,
+                account_id: "acc-1".to_string(),
+                mode: "auth-only".to_string(),
+                port: 9002,
+                status: "stopped".to_string(),
+                tokens_str: "0".to_string(),
+                workspace_path: None,
+                profile_dir: "C:\\Profiles\\DataScraper".to_string(),
+                pid: None,
+                last_used: "Never".to_string(),
+                binary_path: None,
+                custom_flags: None,
+                env_vars: None,
+                app_type: Some("antigravity".to_string()),
+                blackhole_sync: None,
+                sync_mode: None,
+                tier: Some("Plus".to_string()),
+            },
+        ],
+        parent_binaries: None,
+    };
+
+    // 1. Exact duplicate creation attempt
+    let candidate_exact = "Agent Matrix";
+    let is_dup_exact = fleet.instances.iter().any(|i| i.name.trim().eq_ignore_ascii_case(candidate_exact.trim()));
+    assert!(is_dup_exact, "Exact duplicate name must be detected");
+
+    // 2. Case-insensitive lowercase duplicate creation attempt
+    let candidate_lower = "agent matrix";
+    let is_dup_lower = fleet.instances.iter().any(|i| i.name.trim().eq_ignore_ascii_case(candidate_lower.trim()));
+    assert!(is_dup_lower, "Lowercase duplicate name must be detected");
+
+    // 3. Uppercase with leading/trailing whitespace creation attempt
+    let candidate_spaced = "   AGENT MATRIX   ";
+    let is_dup_spaced = fleet.instances.iter().any(|i| i.name.trim().eq_ignore_ascii_case(candidate_spaced.trim()));
+    assert!(is_dup_spaced, "Spaced uppercase duplicate name must be detected");
+
+    // 4. Unique name creation attempt -> allowed
+    let candidate_unique = "Quantum Compiler";
+    let is_dup_unique = fleet.instances.iter().any(|i| i.name.trim().eq_ignore_ascii_case(candidate_unique.trim()));
+    assert!(!is_dup_unique, "Unique name must NOT be flagged as duplicate");
+
+    // 5. Update validation: renaming inst-existing-2 to "Agent Matrix" must be blocked
+    let target_update_name = "Agent Matrix";
+    let target_inst_id = "inst-existing-2";
+    let would_collide = fleet.instances.iter().any(|i| i.id != target_inst_id && i.name.trim().eq_ignore_ascii_case(target_update_name.trim()));
+    assert!(would_collide, "Renaming instance 2 to existing instance 1 name must be blocked");
+
+    // 6. Update validation: keeping instance 1's own name must be permitted
+    let own_name = "Agent Matrix";
+    let own_id = "inst-existing-1";
+    let own_collides = fleet.instances.iter().any(|i| i.id != own_id && i.name.trim().eq_ignore_ascii_case(own_name.trim()));
+    assert!(!own_collides, "Keeping instance's own name on save must NOT collide");
+}
+
+#[test]
+fn test_list_available_groups_aggregates_instances_and_disk_folders() {
+    let inst1 = Instance {
+        id: "inst-test-g1".to_string(),
+        name: "Alpha".to_string(),
+        tag: Some("GalaxyA".to_string()),
+        account_id: "acc-1".to_string(),
+        mode: "auth-only".to_string(),
+        port: 9201,
+        status: "stopped".to_string(),
+        tokens_str: "1.0M".to_string(),
+        workspace_path: None,
+        profile_dir: r"C:\Test\Alpha".to_string(),
+        pid: None,
+        last_used: "now".to_string(),
+        binary_path: None,
+        custom_flags: None,
+        env_vars: None,
+        app_type: Some("antigravity".to_string()),
+        blackhole_sync: None,
+        sync_mode: Some("solar_system".to_string()),
+        tier: None,
+    };
+
+    let inst2 = Instance {
+        id: "inst-test-g2".to_string(),
+        name: "Beta".to_string(),
+        tag: Some("GalaxyA".to_string()),
+        account_id: "acc-1".to_string(),
+        mode: "auth-only".to_string(),
+        port: 9202,
+        status: "stopped".to_string(),
+        tokens_str: "2.0M".to_string(),
+        workspace_path: None,
+        profile_dir: r"C:\Test\Beta".to_string(),
+        pid: None,
+        last_used: "now".to_string(),
+        binary_path: None,
+        custom_flags: None,
+        env_vars: None,
+        app_type: Some("antigravity".to_string()),
+        blackhole_sync: None,
+        sync_mode: Some("solar_system".to_string()),
+        tier: None,
+    };
+
+    let inst3 = Instance {
+        id: "inst-test-g3".to_string(),
+        name: "Gamma".to_string(),
+        tag: Some("Projects".to_string()),
+        account_id: "acc-1".to_string(),
+        mode: "auth-only".to_string(),
+        port: 9203,
+        status: "stopped".to_string(),
+        tokens_str: "3.0M".to_string(),
+        workspace_path: None,
+        profile_dir: r"C:\Test\Gamma".to_string(),
+        pid: None,
+        last_used: "now".to_string(),
+        binary_path: None,
+        custom_flags: None,
+        env_vars: None,
+        app_type: Some("antigravity".to_string()),
+        blackhole_sync: None,
+        sync_mode: Some("solar_system".to_string()),
+        tier: None,
+    };
+
+    let instances = vec![inst1, inst2, inst3];
+
+    let mut map: std::collections::BTreeMap<String, Vec<String>> = std::collections::BTreeMap::new();
+    for inst in &instances {
+        let g = app_lib::conversations::get_instance_solar_group(inst);
+        if !g.is_empty() && g != "General Workspaces" {
+            map.entry(g).or_default().push(inst.name.clone());
+        }
+    }
+
+    assert!(map.contains_key("GalaxyA"));
+    assert_eq!(map.get("GalaxyA").unwrap().len(), 2);
+    assert_eq!(map.get("Projects").unwrap().len(), 1);
+
+    let mut groups: Vec<app_lib::models::AvailableGroup> = map
+        .into_iter()
+        .map(|(name, insts)| {
+            let count = insts.len();
+            app_lib::models::AvailableGroup {
+                name,
+                instance_count: count,
+                instances: insts,
+                has_shared_brain: false,
+            }
+        })
+        .collect();
+
+    groups.sort_by(|a, b| b.instance_count.cmp(&a.instance_count).then_with(|| a.name.cmp(&b.name)));
+
+    assert_eq!(groups[0].name, "GalaxyA");
+    assert_eq!(groups[0].instance_count, 2);
+    assert_eq!(groups[1].name, "Projects");
+    assert_eq!(groups[1].instance_count, 1);
+}
+
+#[test]
+fn test_solo_orbit_group_collision_and_rogue_isolation() {
+    let fleet = FleetState {
+        accounts: vec![],
+        instances: vec![
+            Instance {
+                id: "inst-solar-1".to_string(),
+                name: "Planet Alpha".to_string(),
+                tag: Some("Alpha Solar System".to_string()),
+                account_id: "acc-1".to_string(),
+                mode: "auth-only".to_string(),
+                port: 9301,
+                status: "stopped".to_string(),
+                tokens_str: "1.0M".to_string(),
+                workspace_path: None,
+                profile_dir: r"C:\Test\Alpha".to_string(),
+                pid: None,
+                last_used: "now".to_string(),
+                binary_path: None,
+                custom_flags: None,
+                env_vars: None,
+                app_type: Some("antigravity".to_string()),
+                blackhole_sync: None,
+                sync_mode: Some("solar_system".to_string()),
+                tier: None,
+            },
+            Instance {
+                id: "inst-rogue-1".to_string(),
+                name: "Rogue Nomad".to_string(),
+                tag: Some("Deep Void".to_string()),
+                account_id: "acc-1".to_string(),
+                mode: "auth-only".to_string(),
+                port: 9302,
+                status: "stopped".to_string(),
+                tokens_str: "1.0M".to_string(),
+                workspace_path: None,
+                profile_dir: r"C:\Test\Nomad".to_string(),
+                pid: None,
+                last_used: "now".to_string(),
+                binary_path: None,
+                custom_flags: None,
+                env_vars: None,
+                app_type: Some("antigravity".to_string()),
+                blackhole_sync: None,
+                sync_mode: Some("solo".to_string()),
+                tier: None,
+            },
+            Instance {
+                id: "inst-bh-1".to_string(),
+                name: "Singularity Node".to_string(),
+                tag: Some("Black Hole Singularity".to_string()),
+                account_id: "acc-1".to_string(),
+                mode: "auth-only".to_string(),
+                port: 9303,
+                status: "stopped".to_string(),
+                tokens_str: "1.0M".to_string(),
+                workspace_path: None,
+                profile_dir: r"C:\Test\Singularity".to_string(),
+                pid: None,
+                last_used: "now".to_string(),
+                binary_path: None,
+                custom_flags: None,
+                env_vars: None,
+                app_type: Some("antigravity".to_string()),
+                blackhole_sync: Some(true),
+                sync_mode: Some("black_hole".to_string()),
+                tier: None,
+            },
+        ],
+        parent_binaries: None,
+    };
+
+    // 1. Validation: New Solo instance cannot join existing solar system group ("Alpha Solar System")
+    let new_solo_tag = "alpha solar system";
+    let solo_collides_existing = fleet.instances.iter().any(|i| {
+        let existing_tag = i.tag.as_deref().unwrap_or("Projects").trim();
+        existing_tag.eq_ignore_ascii_case(new_solo_tag.trim())
+    });
+    assert!(solo_collides_existing, "Solo instance must NOT be allowed to join existing solar group 'Alpha Solar System'");
+
+    // 2. Validation: New Solo instance cannot take an existing rogue group ("Deep Void")
+    let new_solo_rogue_tag = "deep void";
+    let solo_collides_rogue = fleet.instances.iter().any(|i| {
+        let existing_tag = i.tag.as_deref().unwrap_or("Projects").trim();
+        existing_tag.eq_ignore_ascii_case(new_solo_rogue_tag.trim())
+    });
+    assert!(solo_collides_rogue, "Solo instance must NOT take another rogue planet's group");
+
+    // 3. Validation: Unique solo group is permitted
+    let unique_solo_tag = "Brand New Private Orbit";
+    let solo_collides_unique = fleet.instances.iter().any(|i| {
+        let existing_tag = i.tag.as_deref().unwrap_or("Projects").trim();
+        existing_tag.eq_ignore_ascii_case(unique_solo_tag.trim())
+    });
+    assert!(!solo_collides_unique, "Unique solo group should be accepted");
+
+    // 4. Validation: New Solar System instance cannot join a Rogue planet group ("Deep Void")
+    let new_solar_tag = "Deep Void";
+    let solar_collides_rogue = fleet.instances.iter().any(|i| {
+        let is_solo = i.sync_mode.as_deref() == Some("solo");
+        let existing_tag = i.tag.as_deref().unwrap_or("Projects").trim();
+        is_solo && existing_tag.eq_ignore_ascii_case(new_solar_tag.trim())
+    });
+    assert!(solar_collides_rogue, "Solar system instance must NOT be allowed to join a rogue planet's group 'Deep Void'");
+
+    // 5. Validation: Solar System instance CAN join an existing Solar System group ("Alpha Solar System")
+    let solar_collides_solar = fleet.instances.iter().any(|i| {
+        let is_solo = i.sync_mode.as_deref() == Some("solo");
+        let existing_tag = i.tag.as_deref().unwrap_or("Projects").trim();
+        is_solo && existing_tag.eq_ignore_ascii_case("Alpha Solar System")
+    });
+    assert!(!solar_collides_solar, "Solar system instance can safely join existing Solar System group");
+
+    // 6. Test list_available_groups filtering:
+    // Rogue groups ("Deep Void") and Black Hole Singularity must be excluded
+    let mut rogue_groups = std::collections::HashSet::new();
+    for inst in &fleet.instances {
+        if inst.sync_mode.as_deref() == Some("solo") {
+            let g = app_lib::conversations::get_instance_solar_group(inst);
+            if !g.is_empty() {
+                rogue_groups.insert(g.to_lowercase());
+            }
+        }
+    }
+
+    let mut map: std::collections::BTreeMap<String, Vec<String>> = std::collections::BTreeMap::new();
+    for inst in &fleet.instances {
+        if inst.sync_mode.as_deref() == Some("solo")
+            || inst.sync_mode.as_deref() == Some("black_hole")
+            || inst.blackhole_sync == Some(true)
+        {
+            continue;
+        }
+
+        let g = app_lib::conversations::get_instance_solar_group(inst);
+        if !g.is_empty() && g != "General Workspaces" && !rogue_groups.contains(&g.to_lowercase()) {
+            map.entry(g).or_default().push(inst.name.clone());
+        }
+    }
+
+    assert!(map.contains_key("Alpha Solar System"), "Alpha Solar System should be listed");
+    assert!(!map.contains_key("Deep Void"), "Rogue group 'Deep Void' must be excluded from available groups");
+    assert!(!map.contains_key("Black Hole Singularity"), "Black Hole Singularity must be excluded");
+}
+
 
 

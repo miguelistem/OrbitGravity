@@ -35,6 +35,8 @@ pub struct Account {
 pub struct Instance {
     pub id: String,
     pub name: String,
+    #[serde(default)]
+    pub tag: Option<String>,
     #[serde(alias = "accountId")]
     pub account_id: String,
     pub mode: String, // 'auth-only' | 'full'
@@ -61,6 +63,8 @@ pub struct Instance {
     pub blackhole_sync: Option<bool>,
     #[serde(default, alias = "syncMode")]
     pub sync_mode: Option<String>,
+    #[serde(default)]
+    pub tier: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -117,6 +121,8 @@ pub struct BlackHoleInfo {
     pub ide_running: bool,
     pub global_conversations_count: usize,
     pub global_brain_path: String,
+    #[serde(default)]
+    pub tethered_planets: Vec<Instance>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -138,6 +144,8 @@ pub struct FleetState {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateInstanceInput {
     pub name: String,
+    #[serde(default)]
+    pub tag: Option<String>,
     #[serde(alias = "accountId")]
     pub account_id: Option<String>,
     pub mode: Option<String>,
@@ -158,4 +166,15 @@ pub struct CreateInstanceInput {
     pub blackhole_sync: Option<bool>,
     #[serde(default, alias = "syncMode")]
     pub sync_mode: Option<String>,
+    #[serde(default)]
+    pub tier: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AvailableGroup {
+    pub name: String,
+    pub instance_count: usize,
+    pub instances: Vec<String>,
+    pub has_shared_brain: bool,
 }

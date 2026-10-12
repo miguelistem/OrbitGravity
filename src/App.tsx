@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { isTauri } from './api';
-import { AntigravityInstance, AntigravityAccount, LogEntry, InstanceStatus, AntigravityAppType } from './types/antigravity';
+import { AntigravityInstance, AntigravityAccount, LogEntry, InstanceStatus, AntigravityAppType, InstanceTier } from './types/antigravity';
 import { INITIAL_ACCOUNTS, INITIAL_INSTANCES, INITIAL_LOGS } from './mock/initialData';
 import { OrbitGravityLogo } from './components/OrbitGravityLogo';
 import { AntigravityWorkspace } from './components/AntigravityWorkspace';
@@ -17,6 +17,7 @@ import { InstanceUsageMonitorView } from './components/InstanceUsageMonitorView'
 import { EventHorizonIcon } from './components/EventHorizonIcon';
 import { InstanceModal } from './components/InstanceModal';
 import { AccountManagerModal } from './components/AccountManagerModal';
+import { CosmicTutorialModal } from './components/CosmicTutorialModal';
 import { 
   Plus, 
   History, 
@@ -30,7 +31,9 @@ import {
   ChevronDown, 
   ListFilter, 
   PanelLeft,
-  AlertTriangle 
+  AlertTriangle,
+  BookOpen,
+  Sparkles
 } from 'lucide-react';
 
 export default function App() {
@@ -80,7 +83,7 @@ export default function App() {
   }, [instances, activeInstanceId]);
 
   // Active main view tab: 'workspace' | 'cosmic' | 'accounts' | 'nebula' | 'usage'
-  const [activeViewTab, setActiveViewTab] = useState<'workspace' | 'cosmic' | 'accounts' | 'nebula' | 'usage'>('workspace');
+  const [activeViewTab, setActiveViewTab] = useState<'workspace' | 'cosmic' | 'accounts' | 'nebula' | 'usage'>('cosmic');
 
   // Sidebar filter
   const [sidebarFilter, setSidebarFilter] = useState<'all' | 'running'>('all');
@@ -97,6 +100,40 @@ export default function App() {
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<AntigravityAccount | null>(null);
   const [errorAlert, setErrorAlert] = useState<{ title: string; message: string } | null>(null);
+
+  // Tutorial / First-Run Guide & Help Menu
+  const TUTORIAL_STORAGE_KEY = 'orbitgravity_has_seen_tutorial_v1';
+  const [isTutorialOpen, setIsTutorialOpen] = useState(false);
+  const [isHelpDropdownOpen, setIsHelpDropdownOpen] = useState(false);
+  const helpMenuRef = useRef<HTMLDivElement>(null);
+
+  // Automatically show cosmic tutorial cards on first run
+  useEffect(() => {
+    try {
+      const hasSeen = localStorage.getItem(TUTORIAL_STORAGE_KEY);
+      if (!hasSeen) {
+        setIsTutorialOpen(true);
+      }
+    } catch {}
+  }, []);
+
+  // Dismiss Help dropdown on outside click
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (helpMenuRef.current && !helpMenuRef.current.contains(e.target as Node)) {
+        setIsHelpDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+  const handleCloseTutorial = () => {
+    try {
+      localStorage.setItem(TUTORIAL_STORAGE_KEY, 'true');
+    } catch {}
+    setIsTutorialOpen(false);
+  };
 
   // Persist state
   useEffect(() => {
@@ -583,7 +620,70 @@ export default function App() {
           <div className="flex items-center gap-3 text-[13px] text-[#A6ABB8]">
             <span className="hover:text-white cursor-pointer px-1.5 py-0.5 rounded hover:bg-zinc-800/50 transition">View</span>
             <span className="hover:text-white cursor-pointer px-1.5 py-0.5 rounded hover:bg-zinc-800/50 transition">Window</span>
-            <span className="hover:text-white cursor-pointer px-1.5 py-0.5 rounded hover:bg-zinc-800/50 transition">Help</span>
+
+            <div className="relative" ref={helpMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsHelpDropdownOpen(!isHelpDropdownOpen)}
+                className={`cursor-pointer px-1.5 py-0.5 rounded transition flex items-center gap-1 ${
+                  isHelpDropdownOpen ? 'bg-[#252834] text-white' : 'hover:text-white hover:bg-zinc-800/50'
+                }`}
+              >
+                <span>Help</span>
+                <ChevronDown className={`w-3 h-3 text-[#7D8290] transition-transform duration-150 ${isHelpDropdownOpen ? 'rotate-180 text-white' : ''}`} />
+              </button>
+
+              {isHelpDropdownOpen && (
+                <div className="absolute left-0 mt-1.5 w-56 bg-[#16171E] border border-[#2B2E3C] rounded-xl shadow-2xl z-50 py-1.5 text-xs divide-y divide-[#222530] animate-in fade-in zoom-in-95 duration-100">
+                  <div className="px-1 py-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsHelpDropdownOpen(false);
+                        setIsTutorialOpen(true);
+                      }}
+                      className="w-full text-left px-3 py-2 rounded-lg hover:bg-[#202330] text-zinc-200 hover:text-white transition flex items-center gap-2.5 cursor-pointer"
+                    >
+                      <BookOpen className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                      <div>
+                        <div className="font-semibold text-zinc-100 leading-tight">Tutorial</div>
+                        <div className="text-[10px] text-zinc-400 leading-tight">Cosmic Field Guide & Concepts</div>
+                      </div>
+                    </button>
+                  </div>
+
+                  <div className="px-1 py-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsHelpDropdownOpen(false);
+                        setActiveViewTab('cosmic');
+                      }}
+                      className="w-full text-left px-3 py-1.5 rounded-lg hover:bg-[#202330] text-zinc-300 hover:text-white transition flex items-center gap-2.5 cursor-pointer"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span>Cosmic Systems Overview</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsHelpDropdownOpen(false);
+                        setActiveViewTab('nebula');
+                      }}
+                      className="w-full text-left px-3 py-1.5 rounded-lg hover:bg-[#202330] text-zinc-300 hover:text-white transition flex items-center gap-2.5 cursor-pointer"
+                    >
+                      <EventHorizonIcon className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                      <span>Event Horizon Archive</span>
+                    </button>
+                  </div>
+
+                  <div className="px-3 py-1.5 text-[10px] text-zinc-500 font-mono flex items-center justify-between">
+                    <span>OrbitGravity</span>
+                    <span className="text-zinc-400">v1.0.0</span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1220,6 +1320,12 @@ export default function App() {
         }}
         onSave={handleSaveAccount}
         initialAccount={editingAccount}
+      />
+
+      {/* Cosmic Field Guide / Tutorial Modal */}
+      <CosmicTutorialModal
+        isOpen={isTutorialOpen}
+        onClose={handleCloseTutorial}
       />
 
       {/* Concurrency Guard & Process Error Alert Modal */}

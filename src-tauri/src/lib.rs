@@ -81,6 +81,8 @@ pub fn run() {
             commands::delete_conversation,
             commands::get_all_antigravity_quotas,
             commands::get_instance_quota_summary,
+            commands::get_conversation_transcript,
+            commands::list_available_groups,
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

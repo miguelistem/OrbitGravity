@@ -84,6 +84,7 @@ export interface ConversationInfo {
   step_count: number;
   last_modified: string;
   source_name: string;
+  profile_dir?: string;
 }
 
 export interface SharedBrainStatus {
@@ -118,11 +119,29 @@ export interface BlackHoleInfo {
   ideRunning?: boolean;
   globalConversationsCount: number;
   globalBrainPath: string;
+  tetheredPlanets?: AntigravityInstance[];
 }
 
 export interface CosmicOverview {
   blackHole: BlackHoleInfo;
   solarSystems: SolarSystemInfo[];
   roguePlanets: AntigravityInstance[];
+}
+
+export interface TranscriptStep {
+  step_index: number;
+  source: string;
+  step_type: string;
+  content: string;
+  thinking?: string;
+  tool_calls: string[];
+  created_at?: string;
+}
+
+export interface AvailableGroup {
+  name: string;
+  instanceCount: number;
+  instances: string[];
+  hasSharedBrain: boolean;
 }
 

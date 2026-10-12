@@ -137,6 +137,7 @@ pub fn create_instance(
     payload: Option<CreateInstanceInput>,
     instance: Option<CreateInstanceInput>,
     name: Option<String>,
+    tag: Option<String>,
     account_id: Option<String>,
     mode: Option<String>,
     port: Option<u16>,
@@ -150,6 +151,7 @@ pub fn create_instance(
 ) -> Result<Instance, String> {
     let mut input = payload.or(instance).unwrap_or_else(|| CreateInstanceInput {
         name: name.clone().unwrap_or_else(|| "New Instance".to_string()),
+        tag: tag.clone(),
         account_id: account_id.clone(),
         mode: mode.clone(),
         port,
@@ -161,7 +163,12 @@ pub fn create_instance(
         create_shortcut,
         blackhole_sync: None,
         sync_mode: sync_mode.clone(),
+        tier: None,
     });
+
+    if input.tag.is_none() && tag.is_some() {
+        input.tag = tag;
+    }
 
     if input.binary_path.is_none() && binary_path.is_some() {
         input.binary_path = binary_path;
@@ -185,11 +192,51 @@ pub fn create_instance(
         input.sync_mode = sync_mode;
     }
 
-    if input.name.trim().is_empty() {
+    let trimmed_name = input.name.trim();
+    if trimmed_name.is_empty() {
         return Err("Instance name cannot be empty".to_string());
     }
 
     let mut fleet = state.fleet.lock().map_err(|e| e.to_string())?;
+
+    if fleet.instances.iter().any(|i| i.name.trim().eq_ignore_ascii_case(trimmed_name)) {
+        return Err(format!("An instance with the name '{}' already exists. Please choose a unique name.", trimmed_name));
+    }
+
+    let effective_sync_mode = input.sync_mode.clone().unwrap_or_else(|| {
+        if input.blackhole_sync == Some(true) {
+            "black_hole".to_string()
+        } else {
+            "solar_system".to_string()
+        }
+    });
+
+    let effective_tag = input.tag.as_deref().unwrap_or("Projects").trim();
+
+    if effective_sync_mode == "solo" {
+        // Solo system orbits MUST have a unique group name and CANNOT join an existing group.
+        if fleet.instances.iter().any(|i| {
+            let existing_tag = i.tag.as_deref().unwrap_or("Projects").trim();
+            existing_tag.eq_ignore_ascii_case(effective_tag)
+        }) {
+            return Err(format!(
+                "Solo system orbits cannot join existing group '{}'. A solo system requires a unique group name.",
+                effective_tag
+            ));
+        }
+    } else if effective_sync_mode == "solar_system" {
+        // A solar system orbit cannot join a group that already contains a solo rogue planet!
+        if fleet.instances.iter().any(|i| {
+            let is_solo = i.sync_mode.as_deref() == Some("solo");
+            let existing_tag = i.tag.as_deref().unwrap_or("Projects").trim();
+            is_solo && existing_tag.eq_ignore_ascii_case(effective_tag)
+        }) {
+            return Err(format!(
+                "Group '{}' is an isolated Solo System (Rogue Planet) and cannot be joined by other instances.",
+                effective_tag
+            ));
+        }
+    }
 
     let acc_id = input.account_id
         .filter(|s| !s.trim().is_empty())
@@ -234,6 +281,7 @@ pub fn create_instance(
     let new_instance = Instance {
         id: format!("inst-{}", &Uuid::new_v4().to_string()[..8]),
         name: input.name,
+        tag: input.tag,
         account_id: acc_id,
         mode: instance_mode,
         port: assigned_port,
@@ -255,9 +303,10 @@ pub fn create_instance(
                 Some("solar_system".to_string())
             }
         }),
+        tier: input.tier.or(Some("Pro".to_string())),
     };
 
-    // Optionally create desktop shortcut automatically if requested
+    // Spawn shortcut creation in background thread so GUI never freezes
     if input.create_shortcut.unwrap_or(false) {
         let target_bin = match &new_instance.binary_path {
             Some(custom) if Path::new(custom).exists() => PathBuf::from(custom),
@@ -266,14 +315,23 @@ pub fn create_instance(
                 detect_binary_for_app_type(a_type).unwrap_or_else(|| PathBuf::from("antigravity.exe"))
             }
         };
-        let _ = create_instance_desktop_shortcut(&new_instance, &target_bin, None);
+        let inst_clone = new_instance.clone();
+        std::thread::spawn(move || {
+            let _ = create_instance_desktop_shortcut(&inst_clone, &target_bin, None);
+        });
     }
 
     fleet.instances.push(new_instance.clone());
     sync_account_stats(&mut fleet);
     save_fleet_state(&fleet)?;
-    let _ = crate::conversations::sync_instance_on_session_start(&new_instance);
-    let _ = crate::conversations::sync_all_shared_brains(&fleet.instances);
+
+    // Spawn convergence synchronization in background thread so create_instance returns instantaneously (<15ms)
+    let fleet_instances = fleet.instances.clone();
+    let inst_clone = new_instance.clone();
+    std::thread::spawn(move || {
+        let _ = crate::conversations::sync_instance_on_session_start(&inst_clone);
+        let _ = crate::conversations::sync_all_shared_brains(&fleet_instances);
+    });
 
     Ok(new_instance)
 }
@@ -283,6 +341,7 @@ pub fn update_instance(
     state: State<'_, AppState>,
     id: String,
     name: Option<String>,
+    tag: Option<String>,
     account_id: Option<String>,
     mode: Option<String>,
     workspace_path: Option<String>,
@@ -291,8 +350,55 @@ pub fn update_instance(
     app_type: Option<String>,
     blackhole_sync: Option<bool>,
     sync_mode: Option<String>,
+    tier: Option<String>,
 ) -> Result<Instance, String> {
     let mut fleet = state.fleet.lock().map_err(|e| e.to_string())?;
+    if let Some(ref n) = name {
+        let trimmed_new = n.trim();
+        if trimmed_new.is_empty() {
+            return Err("Instance name cannot be empty".to_string());
+        }
+        if fleet.instances.iter().any(|i| i.id != id && i.name.trim().eq_ignore_ascii_case(trimmed_new)) {
+            return Err(format!("An instance with the name '{}' already exists. Please choose a unique name.", trimmed_new));
+        }
+    }
+
+    let (current_tag, current_sync_mode) = {
+        let current_inst = fleet.instances.iter().find(|i| i.id == id)
+            .ok_or_else(|| format!("Instance with id '{}' not found", id))?;
+        (
+            current_inst.tag.clone().unwrap_or_else(|| "Projects".to_string()),
+            current_inst.sync_mode.clone().unwrap_or_else(|| "solar_system".to_string()),
+        )
+    };
+
+    let target_tag = tag.as_deref().unwrap_or(&current_tag).trim();
+    let target_sync_mode = sync_mode.as_deref().unwrap_or(&current_sync_mode);
+
+    if target_sync_mode == "solo" {
+        // Solo system orbits cannot share a group with ANY OTHER instance (i.id != id)
+        if fleet.instances.iter().any(|i| {
+            i.id != id && i.tag.as_deref().unwrap_or("Projects").trim().eq_ignore_ascii_case(target_tag)
+        }) {
+            return Err(format!(
+                "Solo system orbits cannot join existing group '{}'. A solo system requires a unique group name.",
+                target_tag
+            ));
+        }
+    } else if target_sync_mode == "solar_system" {
+        // A solar system orbit cannot join a group that belongs to another solo rogue planet
+        if fleet.instances.iter().any(|i| {
+            i.id != id
+                && i.sync_mode.as_deref() == Some("solo")
+                && i.tag.as_deref().unwrap_or("Projects").trim().eq_ignore_ascii_case(target_tag)
+        }) {
+            return Err(format!(
+                "Group '{}' is an isolated Solo System (Rogue Planet) and cannot be joined by other instances.",
+                target_tag
+            ));
+        }
+    }
+
     let instance = fleet.instances.iter_mut().find(|i| i.id == id)
         .ok_or_else(|| format!("Instance with id '{}' not found", id))?;
 
@@ -300,6 +406,9 @@ pub fn update_instance(
         if !n.trim().is_empty() {
             instance.name = n;
         }
+    }
+    if let Some(t) = tag {
+        instance.tag = Some(t);
     }
     if let Some(acc) = account_id {
         instance.account_id = acc;
@@ -319,6 +428,9 @@ pub fn update_instance(
     }
     if let Some(at) = app_type {
         instance.app_type = Some(at);
+    }
+    if let Some(tr) = tier {
+        instance.tier = Some(tr);
     }
     if let Some(sm) = sync_mode {
         if sm == "black_hole" {
@@ -347,7 +459,12 @@ pub fn update_instance(
     let updated = instance.clone();
     sync_account_stats(&mut fleet);
     save_fleet_state(&fleet)?;
-    let _ = crate::conversations::sync_all_shared_brains(&fleet.instances);
+
+    let fleet_instances = fleet.instances.clone();
+    std::thread::spawn(move || {
+        let _ = crate::conversations::sync_all_shared_brains(&fleet_instances);
+    });
+
     Ok(updated)
 }
 
@@ -722,13 +839,7 @@ pub fn transfer_conversation(
         }
     } else if !is_dest_solo {
         // Solar System brain: Check all members in destination's group
-        let mut dest_group = "General".to_string();
-        if let Some(parent) = Path::new(&dest.profile_dir).parent() {
-            let p_name = parent.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            if p_name.to_lowercase() != "antigravityprofiles" && !p_name.is_empty() {
-                dest_group = p_name.to_string();
-            }
-        }
+        let dest_group = crate::conversations::get_instance_solar_group(&dest);
 
         let mut running_members = Vec::new();
         for inst in &fleet.instances {
@@ -736,13 +847,7 @@ pub fn transfer_conversation(
             let is_solo = inst.sync_mode.as_deref() == Some("solo");
             if is_bh || is_solo { continue; }
 
-            let mut g = "General".to_string();
-            if let Some(parent) = Path::new(&inst.profile_dir).parent() {
-                let p_name = parent.file_name().and_then(|n| n.to_str()).unwrap_or("");
-                if p_name.to_lowercase() != "antigravityprofiles" && !p_name.is_empty() {
-                    g = p_name.to_string();
-                }
-            }
+            let g = crate::conversations::get_instance_solar_group(inst);
 
             if g.eq_ignore_ascii_case(&dest_group) && inst.status == "running" {
                 running_members.push(inst.name.clone());
@@ -775,13 +880,7 @@ pub fn transfer_conversation(
     if is_dest_bh {
         let _ = crate::conversations::sync_black_hole_fleet(&fleet.instances);
     } else if !is_dest_solo {
-        let mut dest_group = "General".to_string();
-        if let Some(parent) = Path::new(&dest.profile_dir).parent() {
-            let p_name = parent.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            if p_name.to_lowercase() != "antigravityprofiles" && !p_name.is_empty() {
-                dest_group = p_name.to_string();
-            }
-        }
+        let dest_group = crate::conversations::get_instance_solar_group(&dest);
         let _ = crate::conversations::sync_solar_system_fleet(&dest_group, &fleet.instances);
     }
 
@@ -954,6 +1053,25 @@ pub fn get_cosmic_systems_overview(state: State<'_, AppState>) -> Result<crate::
         .unwrap_or_default();
     let parent_info = crate::process::get_parent_process_info_with_tracked(Some(&tracked_pids));
 
+    let mut tethered_planets: Vec<Instance> = Vec::new();
+    let mut systems_map: std::collections::HashMap<String, Vec<Instance>> = std::collections::HashMap::new();
+    let mut rogue_planets: Vec<Instance> = Vec::new();
+
+    for inst in &fleet.instances {
+        if inst.blackhole_sync == Some(true) || inst.sync_mode.as_deref() == Some("black_hole") {
+            tethered_planets.push(inst.clone());
+            continue;
+        }
+
+        if inst.sync_mode.as_deref() == Some("solo") {
+            rogue_planets.push(inst.clone());
+            continue;
+        }
+
+        let group_key = crate::conversations::get_instance_solar_group(inst);
+        systems_map.entry(group_key).or_default().push(inst.clone());
+    }
+
     let black_hole = crate::models::BlackHoleInfo {
         name: "The Black Hole (Parent Singularity)".to_string(),
         app_path: resolved_app,
@@ -964,55 +1082,57 @@ pub fn get_cosmic_systems_overview(state: State<'_, AppState>) -> Result<crate::
         ide_running: parent_info.ide_running,
         global_conversations_count: global_total,
         global_brain_path: dirs::home_dir().map(|h| h.join(".gemini").to_string_lossy().to_string()).unwrap_or_else(|| "%USERPROFILE%\\.gemini".to_string()),
+        tethered_planets,
     };
-
-    let mut systems_map: std::collections::HashMap<String, Vec<Instance>> = std::collections::HashMap::new();
-    let mut rogue_planets: Vec<Instance> = Vec::new();
-
-    for inst in &fleet.instances {
-        if inst.blackhole_sync == Some(true) || inst.sync_mode.as_deref() == Some("black_hole") {
-            continue;
-        }
-
-        if inst.sync_mode.as_deref() == Some("solo") {
-            rogue_planets.push(inst.clone());
-            continue;
-        }
-
-        let mut group_key = "General".to_string();
-        if let Some(parent) = std::path::Path::new(&inst.profile_dir).parent() {
-            let parent_name = parent.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            if parent_name.to_lowercase() != "antigravityprofiles" && !parent_name.is_empty() {
-                group_key = parent_name.to_string();
-            }
-        }
-        systems_map.entry(group_key).or_default().push(inst.clone());
-    }
 
     let mut solar_systems: Vec<crate::models::SolarSystemInfo> = Vec::new();
     for (group_name, instances) in systems_map {
-        if instances.len() >= 2 {
-            let slug: String = group_name.chars().filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_').collect();
-            let star_path = crate::conversations::get_shared_brains_base_dir().join(&slug).to_string_lossy().to_string();
-            let first_inst = &instances[0];
-            let convs = crate::conversations::list_conversations_for_source(
-                Some(&first_inst.profile_dir),
-                first_inst.app_type.as_deref().unwrap_or("antigravity_ide"),
+        let slug: String = group_name.chars().filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_').collect();
+        let star_path = crate::conversations::get_shared_brains_base_dir().join(&slug).to_string_lossy().to_string();
+
+        let mut seen_convs = std::collections::HashSet::new();
+        let mut total_convs = 0;
+
+        // Check shared star brain if it exists on disk
+        if std::path::Path::new(&star_path).exists() {
+            let star_convs = crate::conversations::list_conversations_for_source(
+                Some(&star_path),
+                "antigravity_ide",
                 false,
                 &group_name,
             );
-
-            solar_systems.push(crate::models::SolarSystemInfo {
-                name: group_name,
-                star_brain_path: star_path,
-                is_shared: true,
-                total_conversations: convs.len(),
-                planets: instances,
-            });
-        } else {
-            rogue_planets.extend(instances);
+            for c in star_convs {
+                if seen_convs.insert(c.id) {
+                    total_convs += 1;
+                }
+            }
         }
+
+        // Count conversations from all planet member instances in this system
+        for inst in &instances {
+            let inst_convs = crate::conversations::list_conversations_for_source(
+                Some(&inst.profile_dir),
+                inst.app_type.as_deref().unwrap_or("antigravity_ide"),
+                false,
+                &inst.name,
+            );
+            for c in inst_convs {
+                if seen_convs.insert(c.id) {
+                    total_convs += 1;
+                }
+            }
+        }
+
+        solar_systems.push(crate::models::SolarSystemInfo {
+            name: group_name,
+            star_brain_path: star_path,
+            is_shared: instances.len() >= 2,
+            total_conversations: total_convs,
+            planets: instances,
+        });
     }
+
+    solar_systems.sort_by(|a, b| a.name.cmp(&b.name));
 
     Ok(crate::models::CosmicOverview {
         black_hole,
@@ -1080,6 +1200,96 @@ pub fn get_instance_quota_summary(state: State<'_, AppState>, id: String) -> Res
     let instance = fleet.instances.iter().find(|i| i.id == id)
         .ok_or_else(|| format!("Instance with id '{}' not found", id))?;
     Ok(crate::quota::fetch_instance_quota(instance))
+}
+
+#[tauri::command]
+pub fn get_conversation_transcript(
+    conversation_id: String,
+    profile_dir: Option<String>,
+    is_global: bool,
+    app_type: Option<String>,
+) -> Result<Vec<crate::conversations::TranscriptStep>, String> {
+    Ok(crate::conversations::read_conversation_transcript(
+        &conversation_id,
+        profile_dir.as_deref(),
+        is_global,
+        app_type.as_deref().unwrap_or("antigravity_ide"),
+    ))
+}
+
+#[tauri::command]
+pub fn list_available_groups(state: State<'_, AppState>) -> Result<Vec<crate::models::AvailableGroup>, String> {
+    let fleet = state.fleet.lock().map_err(|e| e.to_string())?;
+    let mut map: std::collections::BTreeMap<String, Vec<String>> = std::collections::BTreeMap::new();
+
+    // Collect all rogue/solo groups (any group holding an instance with sync_mode == "solo")
+    let mut rogue_groups = std::collections::HashSet::new();
+    for inst in &fleet.instances {
+        if inst.sync_mode.as_deref() == Some("solo") {
+            let g = crate::conversations::get_instance_solar_group(inst);
+            if !g.is_empty() {
+                rogue_groups.insert(g.to_lowercase());
+            }
+        }
+    }
+
+    // 1. Gather all groups currently assigned to solar system instances
+    for inst in &fleet.instances {
+        if inst.sync_mode.as_deref() == Some("solo")
+            || inst.sync_mode.as_deref() == Some("black_hole")
+            || inst.blackhole_sync == Some(true)
+        {
+            continue;
+        }
+
+        let g = crate::conversations::get_instance_solar_group(inst);
+        if !g.is_empty() && g != "General Workspaces" && !rogue_groups.contains(&g.to_lowercase()) {
+            map.entry(g).or_default().push(inst.name.clone());
+        }
+    }
+
+    // 2. Discover shared brains directories on disk (%USERPROFILE%\AntigravityProfiles\_shared_brains)
+    let shared_base = crate::conversations::get_shared_brains_base_dir();
+    if let Ok(entries) = std::fs::read_dir(&shared_base) {
+        for entry in entries.flatten() {
+            if entry.path().is_dir() {
+                let folder_name = entry.file_name().to_string_lossy().to_string();
+                if !folder_name.starts_with("Group_")
+                    && !folder_name.is_empty()
+                    && folder_name != "General"
+                    && folder_name != "General Workspaces"
+                    && !rogue_groups.contains(&folder_name.to_lowercase())
+                {
+                    map.entry(folder_name).or_default();
+                }
+            }
+        }
+    }
+
+    // 3. Ensure standard "Projects" exists as fallback if not a rogue group
+    if map.is_empty() && !rogue_groups.contains("projects") {
+        map.entry("Projects".to_string()).or_default();
+    }
+
+    let mut result: Vec<crate::models::AvailableGroup> = map
+        .into_iter()
+        .map(|(name, instances)| {
+            let slug: String = name.chars().filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_').collect();
+            let brain_path = shared_base.join(&slug);
+            let has_shared_brain = brain_path.exists();
+            let count = instances.len();
+            crate::models::AvailableGroup {
+                name,
+                instance_count: count,
+                instances,
+                has_shared_brain,
+            }
+        })
+        .collect();
+
+    // Sort by instance_count descending, then alphabetical name
+    result.sort_by(|a, b| b.instance_count.cmp(&a.instance_count).then_with(|| a.name.cmp(&b.name)));
+    Ok(result)
 }
 
 

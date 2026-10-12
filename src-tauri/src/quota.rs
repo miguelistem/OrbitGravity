@@ -397,6 +397,7 @@ pub fn fetch_all_antigravity_app_quotas(instances: &[Instance]) -> Vec<InstanceQ
             let virtual_bh = Instance {
                 id: "black_hole_parent".to_string(),
                 name: "The Black Hole (Parent Singularity)".to_string(),
+                tag: None,
                 account_id: "global-parent".to_string(),
                 mode: "auth-only".to_string(),
                 port: 0,
@@ -412,6 +413,7 @@ pub fn fetch_all_antigravity_app_quotas(instances: &[Instance]) -> Vec<InstanceQ
                 app_type: Some("antigravity".to_string()),
                 blackhole_sync: Some(true),
                 sync_mode: Some("black_hole".to_string()),
+                tier: Some("Pro".to_string()),
             };
             results.push(fetch_instance_quota(&virtual_bh));
         }
