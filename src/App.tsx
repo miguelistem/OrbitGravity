@@ -69,8 +69,15 @@ export default function App() {
 
   // Active selected instance in OrbitGravity
   const [activeInstanceId, setActiveInstanceId] = useState<string>(
-    instances[0]?.id || 'inst-portfolio-spec'
+    instances[0]?.id || ''
   );
+
+  // Auto-sync activeInstanceId if instance list changes
+  useEffect(() => {
+    if (instances.length > 0 && (!activeInstanceId || !instances.some((i) => i.id === activeInstanceId))) {
+      setActiveInstanceId(instances[0].id);
+    }
+  }, [instances, activeInstanceId]);
 
   // Active main view tab: 'workspace' | 'cosmic' | 'accounts' | 'nebula' | 'usage'
   const [activeViewTab, setActiveViewTab] = useState<'workspace' | 'cosmic' | 'accounts' | 'nebula' | 'usage'>('workspace');
@@ -854,116 +861,135 @@ export default function App() {
                     </div>
                   </div>
 
-                  {Object.entries(groupedInstances).map(([groupName, items]) => {
-                    const isCollapsed = !!collapsedFolders[groupName];
-                    const isSolarSystem = items.length >= 2;
-                    return (
-                      <div key={groupName} className="space-y-0.5">
-                        {/* Folder / Solar System Category Row */}
-                        <div
-                          onClick={() => toggleFolder(groupName)}
-                          className="flex items-center gap-2 px-2 py-1.5 rounded-md text-[13px] font-medium text-[#9A9EA8] hover:text-[#EDEDED] hover:bg-[#181A22] cursor-pointer select-none transition-colors"
-                        >
-                          {isCollapsed ? (
-                            <ChevronRight className="w-3.5 h-3.5 text-[#707482] shrink-0" />
-                          ) : (
-                            <ChevronDown className="w-3.5 h-3.5 text-[#707482] shrink-0" />
-                          )}
-                          {isSolarSystem ? (
-                            <span className="text-amber-400 text-xs shrink-0" title="Solar System: Star Shared Brain">☀️</span>
-                          ) : (
-                            <Folder className="w-4 h-4 text-[#8B8F9A] shrink-0" />
-                          )}
-                          <span className="truncate text-[13px] font-medium text-[#A6ABB8]">
-                            {isSolarSystem ? `Solar System: ${groupName}` : groupName}
-                          </span>
-                          <span className="text-[11px] text-[#636775] font-mono ml-auto">
-                            {isSolarSystem ? `${items.length} 🪐` : items.length}
-                          </span>
-                        </div>
-
-                        {/* Child Instance items */}
-                        {!isCollapsed && (
-                          <div className="pl-4 pr-1 space-y-0.5">
-                            {items.map((inst) => {
-                              const isSelected = inst.id === activeInstanceId && activeViewTab === 'workspace';
-                              const isRunning = inst.status === 'running';
-
-                              return (
-                                <div
-                                  key={inst.id}
-                                  onClick={() => {
-                                    setActiveInstanceId(inst.id);
-                                    setActiveViewTab('workspace');
-                                  }}
-                                  className={`group flex items-center justify-between px-3 py-2 rounded-lg text-[13.5px] transition-all cursor-pointer select-none ${
-                                    isSelected
-                                      ? 'bg-[#282A34] text-white font-medium shadow-sm'
-                                      : 'text-[#C4C7D0] hover:bg-[#1B1D25] hover:text-white'
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                    {isRunning ? (
-                                      <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
-                                    ) : (
-                                      <span className="w-2 h-2 rounded-full bg-zinc-600 shrink-0" />
-                                    )}
-                                    <span className="truncate text-[13.5px] text-[#EDEDED] group-hover:text-white">
-                                      {inst.name}
-                                    </span>
-                                  </div>
-
-                                  <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                                    {inst.blackholeSync && (
-                                      <span
-                                        className="inline-flex items-center justify-center leading-none h-[18px] px-1.5 rounded text-[10px] bg-purple-950/70 text-purple-300 border border-purple-700/50"
-                                        title="Synchronized with The Black Hole"
-                                      >
-                                        🕳️
-                                      </span>
-                                    )}
-                                    <span className={`inline-flex items-center justify-center leading-none h-[18px] px-1.5 rounded text-[9.5px] font-mono font-semibold ${
-                                      inst.appType === 'antigravity'
-                                        ? 'bg-purple-950/40 text-purple-400 border border-purple-800/40'
-                                        : 'bg-blue-950/40 text-blue-400 border border-blue-800/40'
-                                    }`}>
-                                      {inst.appType === 'antigravity' ? 'App' : 'IDE'}
-                                    </span>
-                                    {inst.tier === 'Pro' ? (
-                                      <span
-                                        className="inline-flex items-center justify-center leading-none h-[18px] px-1.5 rounded text-[9px] font-mono font-extrabold bg-gradient-to-r from-zinc-200 via-white to-zinc-300 text-zinc-950 border border-white/90 shadow-[0_0_8px_rgba(255,255,255,0.4)]"
-                                        title="Pro Tier Instance (Platinum)"
-                                      >
-                                        PRO
-                                      </span>
-                                    ) : inst.tier === 'Plus' ? (
-                                      <span
-                                        className="inline-flex items-center justify-center leading-none h-[18px] px-1.5 rounded text-[9px] font-mono font-bold bg-blue-950/70 text-blue-300 border border-blue-500/60 shadow-[0_0_6px_rgba(59,130,246,0.3)] gap-1"
-                                        title="Plus Tier Instance"
-                                      >
-                                        <Zap className="w-2.5 h-2.5 text-cyan-400 shrink-0" />
-                                        <span>PLUS</span>
-                                      </span>
-                                    ) : (
-                                      <span
-                                        className="inline-flex items-center justify-center leading-none h-[18px] px-1.5 rounded text-[9px] font-mono font-medium bg-zinc-800/80 text-zinc-400 border border-zinc-700/60"
-                                        title="Free Tier Instance"
-                                      >
-                                        FREE
-                                      </span>
-                                    )}
-                                    <span className="inline-flex items-center justify-center leading-none h-[18px] text-[11px] font-mono text-[#787D8A] group-hover:text-[#A6ABB8]">
-                                      {formatInstanceDurationBadge(inst)}
-                                    </span>
-                                  </div>
-                                </div>
-                              );
-                            })}
+                  {instances.length === 0 ? (
+                    <div className="mx-1 my-3 p-3.5 rounded-xl border border-dashed border-[#262835] bg-[#101118]/60 text-center">
+                      <p className="text-xs text-zinc-300 font-medium mb-1">No Active Profiles</p>
+                      <p className="text-[11px] text-zinc-500 mb-3 leading-relaxed">
+                        Create your first isolated Antigravity workspace profile.
+                      </p>
+                      <button
+                        onClick={() => {
+                          setEditingInstance(null);
+                          setIsInstanceModalOpen(true);
+                        }}
+                        className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-lg bg-[#1B1D28] hover:bg-purple-950/60 border border-[#2D3042] hover:border-purple-600/60 text-zinc-300 hover:text-purple-200 text-xs font-medium transition cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5 text-purple-400" />
+                        <span>Add Instance</span>
+                      </button>
+                    </div>
+                  ) : (
+                    Object.entries(groupedInstances).map(([groupName, items]) => {
+                      const isCollapsed = !!collapsedFolders[groupName];
+                      const isSolarSystem = items.length >= 2;
+                      return (
+                        <div key={groupName} className="space-y-0.5">
+                          {/* Folder / Solar System Category Row */}
+                          <div
+                            onClick={() => toggleFolder(groupName)}
+                            className="flex items-center gap-2 px-2 py-1.5 rounded-md text-[13px] font-medium text-[#9A9EA8] hover:text-[#EDEDED] hover:bg-[#181A22] cursor-pointer select-none transition-colors"
+                          >
+                            {isCollapsed ? (
+                              <ChevronRight className="w-3.5 h-3.5 text-[#707482] shrink-0" />
+                            ) : (
+                              <ChevronDown className="w-3.5 h-3.5 text-[#707482] shrink-0" />
+                            )}
+                            {isSolarSystem ? (
+                              <span className="text-amber-400 text-xs shrink-0" title="Solar System: Star Shared Brain">☀️</span>
+                            ) : (
+                              <Folder className="w-4 h-4 text-[#8B8F9A] shrink-0" />
+                            )}
+                            <span className="truncate text-[13px] font-medium text-[#A6ABB8]">
+                              {isSolarSystem ? `Solar System: ${groupName}` : groupName}
+                            </span>
+                            <span className="text-[11px] text-[#636775] font-mono ml-auto">
+                              {isSolarSystem ? `${items.length} 🪐` : items.length}
+                            </span>
                           </div>
-                        )}
-                      </div>
-                    );
-                  })}
+
+                          {/* Child Instance items */}
+                          {!isCollapsed && (
+                            <div className="pl-4 pr-1 space-y-0.5">
+                              {items.map((inst) => {
+                                const isSelected = inst.id === activeInstanceId && activeViewTab === 'workspace';
+                                const isRunning = inst.status === 'running';
+
+                                return (
+                                  <div
+                                    key={inst.id}
+                                    onClick={() => {
+                                      setActiveInstanceId(inst.id);
+                                      setActiveViewTab('workspace');
+                                    }}
+                                    className={`group flex items-center justify-between px-3 py-2 rounded-lg text-[13.5px] transition-all cursor-pointer select-none ${
+                                      isSelected
+                                        ? 'bg-[#282A34] text-white font-medium shadow-sm'
+                                        : 'text-[#C4C7D0] hover:bg-[#1B1D25] hover:text-white'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                      {isRunning ? (
+                                        <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+                                      ) : (
+                                        <span className="w-2 h-2 rounded-full bg-zinc-600 shrink-0" />
+                                      )}
+                                      <span className="truncate text-[13.5px] text-[#EDEDED] group-hover:text-white">
+                                        {inst.name}
+                                      </span>
+                                    </div>
+
+                                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                                      {inst.blackholeSync && (
+                                        <span
+                                          className="inline-flex items-center justify-center leading-none h-[18px] px-1.5 rounded text-[10px] bg-purple-950/70 text-purple-300 border border-purple-700/50"
+                                          title="Synchronized with The Black Hole"
+                                        >
+                                          🕳️
+                                        </span>
+                                      )}
+                                      <span className={`inline-flex items-center justify-center leading-none h-[18px] px-1.5 rounded text-[9.5px] font-mono font-semibold ${
+                                        inst.appType === 'antigravity'
+                                          ? 'bg-purple-950/40 text-purple-400 border border-purple-800/40'
+                                          : 'bg-blue-950/40 text-blue-400 border border-blue-800/40'
+                                      }`}>
+                                        {inst.appType === 'antigravity' ? 'App' : 'IDE'}
+                                      </span>
+                                      {inst.tier === 'Pro' ? (
+                                        <span
+                                          className="inline-flex items-center justify-center leading-none h-[18px] px-1.5 rounded text-[9px] font-mono font-extrabold bg-gradient-to-r from-zinc-200 via-white to-zinc-300 text-zinc-950 border border-white/90 shadow-[0_0_8px_rgba(255,255,255,0.4)]"
+                                          title="Pro Tier Instance (Platinum)"
+                                        >
+                                          PRO
+                                        </span>
+                                      ) : inst.tier === 'Plus' ? (
+                                        <span
+                                          className="inline-flex items-center justify-center leading-none h-[18px] px-1.5 rounded text-[9px] font-mono font-bold bg-blue-950/70 text-blue-300 border border-blue-500/60 shadow-[0_0_6px_rgba(59,130,246,0.3)] gap-1"
+                                          title="Plus Tier Instance"
+                                        >
+                                          <Zap className="w-2.5 h-2.5 text-cyan-400 shrink-0" />
+                                          <span>PLUS</span>
+                                        </span>
+                                      ) : (
+                                        <span
+                                          className="inline-flex items-center justify-center leading-none h-[18px] px-1.5 rounded text-[9px] font-mono font-medium bg-zinc-800/80 text-zinc-400 border border-zinc-700/60"
+                                          title="Free Tier Instance"
+                                        >
+                                          FREE
+                                        </span>
+                                      )}
+                                      <span className="inline-flex items-center justify-center leading-none h-[18px] text-[11px] font-mono text-[#787D8A] group-hover:text-[#A6ABB8]">
+                                        {formatInstanceDurationBadge(inst)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </div>
             ) : (
@@ -1042,22 +1068,85 @@ export default function App() {
 
         {/* CENTER / MAIN WORKSPACE AREA */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {activeViewTab === 'workspace' && activeInstance && (
-            <AntigravityWorkspace
-              instance={activeInstance}
-              instances={instances}
-              account={activeAccount}
-              logs={logs}
-              onToggleStatus={handleToggleStatus}
-              onOpenSettings={(inst) => {
-                setEditingInstance(inst);
-                setIsInstanceModalOpen(true);
-              }}
-              onAddLog={handleAddLog}
-              onLaunchIde={handleLaunchIde}
-              onDeleteInstance={handleDeleteInstance}
-              onClearLogs={handleClearLogs}
-            />
+          {activeViewTab === 'workspace' && (
+            activeInstance ? (
+              <AntigravityWorkspace
+                instance={activeInstance}
+                instances={instances}
+                account={activeAccount}
+                logs={logs}
+                onToggleStatus={handleToggleStatus}
+                onOpenSettings={(inst) => {
+                  setEditingInstance(inst);
+                  setIsInstanceModalOpen(true);
+                }}
+                onAddLog={handleAddLog}
+                onLaunchIde={handleLaunchIde}
+                onDeleteInstance={handleDeleteInstance}
+                onClearLogs={handleClearLogs}
+              />
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[#0C0D12] overflow-y-auto">
+                <div className="max-w-xl mx-auto flex flex-col items-center">
+                  <div className="relative mb-6">
+                    <div className="w-20 h-20 rounded-2xl bg-gradient-to-tr from-purple-900/40 via-indigo-900/30 to-blue-900/20 border border-purple-500/30 flex items-center justify-center shadow-2xl shadow-purple-950/50">
+                      <OrbitGravityLogo className="w-12 h-12" />
+                    </div>
+                    <div className="absolute -inset-2 bg-purple-500/10 blur-xl rounded-full -z-10" />
+                  </div>
+
+                  <h2 className="text-2xl font-bold text-zinc-100 tracking-tight mb-2">
+                    Welcome to OrbitGravity
+                  </h2>
+                  <p className="text-sm text-zinc-400 max-w-md mb-8 leading-relaxed">
+                    Launch and manage multiple isolated Antigravity profiles with independent cookie vaults, project environments, and shared star memory brains.
+                  </p>
+
+                  <button
+                    onClick={() => {
+                      setEditingInstance(null);
+                      setIsInstanceModalOpen(true);
+                    }}
+                    className="flex items-center gap-2.5 px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold text-sm shadow-lg shadow-purple-900/40 hover:shadow-purple-900/60 transition-all cursor-pointer transform hover:-translate-y-0.5 active:translate-y-0"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Create Your First Instance</span>
+                  </button>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-12 w-full text-left">
+                    <div className="p-4 rounded-xl bg-[#13141C] border border-[#1E202B]">
+                      <div className="w-7 h-7 rounded-lg bg-purple-950/60 border border-purple-700/50 flex items-center justify-center mb-3 text-purple-300">
+                        <Terminal className="w-4 h-4" />
+                      </div>
+                      <h4 className="text-xs font-semibold text-zinc-200 mb-1">Total Profile Isolation</h4>
+                      <p className="text-[11.5px] text-zinc-500 leading-relaxed">
+                        Each session runs on its own port with independent authentication tokens and user data dirs.
+                      </p>
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-[#13141C] border border-[#1E202B]">
+                      <div className="w-7 h-7 rounded-lg bg-blue-950/60 border border-blue-700/50 flex items-center justify-center mb-3 text-blue-300">
+                        <Zap className="w-4 h-4" />
+                      </div>
+                      <h4 className="text-xs font-semibold text-zinc-200 mb-1">Zero-Disk Junctions</h4>
+                      <p className="text-[11.5px] text-zinc-500 leading-relaxed">
+                        Shares global extension libraries via NTFS junctions so disk space usage remains near zero.
+                      </p>
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-[#13141C] border border-[#1E202B]">
+                      <div className="w-7 h-7 rounded-lg bg-emerald-950/60 border border-emerald-700/50 flex items-center justify-center mb-3 text-emerald-300">
+                        <Folder className="w-4 h-4" />
+                      </div>
+                      <h4 className="text-xs font-semibold text-zinc-200 mb-1">Custom Workspaces</h4>
+                      <p className="text-[11.5px] text-zinc-500 leading-relaxed">
+                        Point directly to your existing repositories or let OrbitGravity generate a clean isolated workspace.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
           )}
 
           {activeViewTab === 'cosmic' && (

@@ -121,7 +121,7 @@ flowchart TB
 When launching multiple instances of an Electron/Chromium-based application like Antigravity, the secondary instance detects the primary's named pipe or shared memory and delegates its startup parameters to the existing window. Furthermore, VS Code shares credentials stored in the Windows Credential Manager or `%APPDATA%\Code\User`.
 
 #### The Implementation
-OrbitGravity isolates instances completely at launch via [`src-tauri/src/process.rs`](file:///e:/Projects/Vibe%20Coded%20Projects/bettermultigravity/src-tauri/src/process.rs):
+OrbitGravity isolates instances completely at launch via [`src-tauri/src/process.rs`](./src-tauri/src/process.rs):
 
 1. **CLI Flag Injection**:
    ```rust
@@ -142,7 +142,7 @@ OrbitGravity isolates instances completely at launch via [`src-tauri/src/process
 3. **The `SSH_CONNECTION` Trick**:
    VS Code inspects whether it is running within an SSH or remote tunnel session. By injecting a synthetic `SSH_CONNECTION` variable (`127.0.0.1 1234 127.0.0.1 22`), the internal single-instance socket listener is bypassed, allowing two identical binaries to run simultaneously side-by-side.
 4. **Shell Folder Bridging**:
-   When `USERPROFILE` is altered, Windows file pickers (Open Folder, Save As) fail if `Desktop`, `Documents`, or `Downloads` do not exist. [`junction.rs`](file:///e:/Projects/Vibe%20Coded%20Projects/bettermultigravity/src-tauri/src/junction.rs) bridges the real user shell folders into the profile directory using NTFS Junctions.
+   When `USERPROFILE` is altered, Windows file pickers (Open Folder, Save As) fail if `Desktop`, `Documents`, or `Downloads` do not exist. [`junction.rs`](./src-tauri/src/junction.rs) bridges the real user shell folders into the profile directory using NTFS Junctions.
 5. **Language Server & Gemini Configuration**:
    The engine links `%USERPROFILE%\.gemini\config` into `<profile>\.gemini\config`, ensuring the Antigravity language server recognizes workspace skills, rules, and telemetry configs without re-downloading them.
 
@@ -154,7 +154,7 @@ OrbitGravity isolates instances completely at launch via [`src-tauri/src/process
 Windows symbolic links (`mklink /D`) enforce strict UAC security policies. Unless the user runs as Administrator or enables Windows Developer Mode, creating a symlink returns `Error: Access is denied`.
 
 #### The Implementation
-Implemented in [`src-tauri/src/junction.rs`](file:///e:/Projects/Vibe%20Coded%20Projects/bettermultigravity/src-tauri/src/junction.rs):
+Implemented in [`src-tauri/src/junction.rs`](./src-tauri/src/junction.rs):
 - **NTFS Junctions (`mklink /J`)**: Directory junctions are NTFS reparse points designed for local drive directory redirection. Crucially, **they require zero administrative rights**.
   ```cmd
   cmd.exe /C mklink /J "<link_path>" "<target_path>"
@@ -222,7 +222,7 @@ graph TD
 When a user clicks "Sign In with Google" or authorizes a third-party extension within an isolated Antigravity instance, the browser completes OAuth and fires a custom protocol redirect (`antigravity://...` or `antigravity-ide://...`). By default, Windows opens the global parent application, routing the authentication token to the wrong profile!
 
 #### The Implementation
-Implemented in [`src-tauri/src/dispatcher.rs`](file:///e:/Projects/Vibe%20Coded%20Projects/bettermultigravity/src-tauri/src/dispatcher.rs) and [`scripts/dispatcher.ps1`](file:///e:/Projects/Vibe%20Coded%20Projects/bettermultigravity/scripts/dispatcher.ps1):
+Implemented in [`src-tauri/src/dispatcher.rs`](./src-tauri/src/dispatcher.rs) and [`scripts/dispatcher.ps1`](./scripts/dispatcher.ps1):
 
 ```mermaid
 sequenceDiagram
@@ -254,8 +254,8 @@ sequenceDiagram
    Before modifying any registry keys, OrbitGravity captures the existing command strings and writes them to `%LOCALAPPDATA%\BetterMultigravity\registry_backup.json`.
 3. **1-Click Emergency Rollback**:
    OrbitGravity generates standalone fallback scripts:
-   - [`restore_original_protocols.bat`](file:///e:/Projects/Vibe%20Coded%20Projects/bettermultigravity/restore_original_protocols.bat)
-   - [`restore_original_protocols.ps1`](file:///e:/Projects/Vibe%20Coded%20Projects/bettermultigravity/restore_original_protocols.ps1)
+   - [`restore_original_protocols.bat`](./restore_original_protocols.bat)
+   - [`restore_original_protocols.ps1`](./restore_original_protocols.ps1)
    Users can restore original system settings with a single double-click even if OrbitGravity is uninstalled.
 4. **VBScript Silent Wrapper**:
    Executing PowerShell directly from a protocol handler flashes an unwanted black console window. OrbitGravity routes through `dispatcher.vbs` (`WScript.Shell.Run ..., 0, False`) to guarantee a completely invisible, smooth user experience.
@@ -272,7 +272,7 @@ Antigravity stores conversational memories across two decoupled subsystems:
 Copying files alone results in "ghost conversations" that do not render in the UI.
 
 #### The Implementation
-Implemented in [`src-tauri/src/conversations.rs`](file:///e:/Projects/Vibe%20Coded%20Projects/bettermultigravity/src-tauri/src/conversations.rs):
+Implemented in [`src-tauri/src/conversations.rs`](./src-tauri/src/conversations.rs):
 - **Full Asset Copying**: Recursively transfers transcript directories, image artifacts, and `.system_generated` metadata.
 - **SQLite Database Merging**:
   - Connects to source and destination SQLite databases.
@@ -294,7 +294,7 @@ Developers often have multiple installations of Antigravity:
 - Custom / Portable Builds: Windsurf, Cursor, or VS Code derivatives.
 
 #### The Implementation
-Implemented in [`src-tauri/src/detector.rs`](file:///e:/Projects/Vibe%20Coded%20Projects/bettermultigravity/src-tauri/src/detector.rs) & [`ParentBinariesModal.tsx`](file:///e:/Projects/Vibe%20Coded%20Projects/bettermultigravity/src/components/ParentBinariesModal.tsx):
+Implemented in [`src-tauri/src/detector.rs`](./src-tauri/src/detector.rs) & [`ParentBinariesModal.tsx`](./src/components/ParentBinariesModal.tsx):
 - Auto-scans `%LOCALAPPDATA%\Programs`, `%PROGRAMFILES%`, `%PROGRAMFILES(X86)%`, and the Windows `PATH` environment via `where.exe`.
 - Categorizes detected executables as `"ide"` or `"app"`.
 - Allows instances to inherit the global default or configure an explicit per-instance binary override (`instance.binary_path`).
@@ -304,7 +304,7 @@ Implemented in [`src-tauri/src/detector.rs`](file:///e:/Projects/Vibe%20Coded%20
 ### Feature 7: Windows Shortcut Generator & Headless Scripts
 
 #### The Implementation
-Implemented in [`src-tauri/src/shortcut.rs`](file:///e:/Projects/Vibe%20Coded%20Projects/bettermultigravity/src-tauri/src/shortcut.rs):
+Implemented in [`src-tauri/src/shortcut.rs`](./src-tauri/src/shortcut.rs):
 1. **Isolated `launch.bat` Generator**:
    Writes a standalone batch launcher directly into the instance's profile directory:
    ```cmd
@@ -327,7 +327,7 @@ Implemented in [`src-tauri/src/shortcut.rs`](file:///e:/Projects/Vibe%20Coded%20
 ### Feature 8: Real-Time Quota Telemetry & Account Orchestration
 
 #### The Implementation
-Implemented in [`src-tauri/src/telemetry.rs`](file:///e:/Projects/Vibe%20Coded%20Projects/bettermultigravity/src-tauri/src/telemetry.rs) and [`AccountQuotaMonitor.tsx`](file:///e:/Projects/Vibe%20Coded%20Projects/bettermultigravity/src/components/AccountQuotaMonitor.tsx):
+Implemented in [`src-tauri/src/telemetry.rs`](./src-tauri/src/telemetry.rs) and [`AccountQuotaMonitor.tsx`](./src/components/AccountQuotaMonitor.tsx):
 - Tracks monthly token consumption against tier allocations.
 - Computes Request Per Minute (RPM) limits.
 - Tracks daily spend against configured caps.
@@ -341,7 +341,7 @@ Implemented in [`src-tauri/src/telemetry.rs`](file:///e:/Projects/Vibe%20Coded%2
 #### The Implementation
 - **Custom Frameless Titlebar**: Custom window drag regions (`data-tauri-drag-region`) paired with Rust IPC handlers (`window_minimize`, `window_toggle_maximize`, `window_close`).
 - **Binary Resource Compilation**:
-  [`src-tauri/build.rs`](file:///e:/Projects/Vibe%20Coded%20Projects/bettermultigravity/src-tauri/build.rs) embeds `icon.ico` directly into the Windows executable PE resource table (`resource.rc`).
+  [`src-tauri/build.rs`](./src-tauri/build.rs) embeds `icon.ico` directly into the Windows executable PE resource table (`resource.rc`).
   ```rust
   fn main() {
       println!("cargo:rerun-if-changed=tauri.conf.json");
@@ -352,7 +352,7 @@ Implemented in [`src-tauri/src/telemetry.rs`](file:///e:/Projects/Vibe%20Coded%2
   }
   ```
 - **Runtime Win32 Icon Dispatch**:
-  In [`src-tauri/src/lib.rs`](file:///e:/Projects/Vibe%20Coded%20Projects/bettermultigravity/src-tauri/src/lib.rs), OrbitGravity explicitly dispatches `window.set_icon(icon)` during window setup, ensuring the Windows Taskbar immediately adopts the OrbitGravity logo upon boot.
+  In [`src-tauri/src/lib.rs`](./src-tauri/src/lib.rs), OrbitGravity explicitly dispatches `window.set_icon(icon)` during window setup, ensuring the Windows Taskbar immediately adopts the OrbitGravity logo upon boot.
 
 ---
 
@@ -390,7 +390,7 @@ flowchart TD
 
 ### Mutual Exclusion & Concurrency Guard
 
-The concurrency guard is defined in [`src-tauri/src/process.rs`](file:///e:/Projects/Vibe%20Coded%20Projects/bettermultigravity/src-tauri/src/process.rs#L252):
+The concurrency guard is defined in [`src-tauri/src/process.rs`](./src-tauri/src/process.rs#L252):
 1. **Black Hole Mutual Exclusion**:
    Guarantees that the master parent application (`Antigravity.exe` / `Antigravity IDE.exe`) and a Black Hole tethered instance never run concurrently.
 2. **Solar System Mutual Exclusion**:
@@ -432,7 +432,7 @@ pub struct Instance {
 
 ### Backend Rust Unit & Integration Tests (31/31 passing)
 
-The native backend is verified via [`src-tauri/tests/backend_tests.rs`](file:///e:/Projects/Vibe%20Coded%20Projects/bettermultigravity/src-tauri/tests/backend_tests.rs):
+The native backend is verified via [`src-tauri/tests/backend_tests.rs`](./src-tauri/tests/backend_tests.rs):
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml

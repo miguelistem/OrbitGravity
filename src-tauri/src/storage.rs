@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 use crate::models::{Account, FleetState, Instance};
-use crate::detector::get_base_profiles_dir;
 
 /// Resolves the file path for fleet state persistence.
 pub fn get_storage_path() -> PathBuf {
@@ -18,8 +17,6 @@ pub fn get_storage_path() -> PathBuf {
 
 /// Generates default seed data matching the mockup.
 pub fn get_seed_data() -> FleetState {
-    let profiles_base = get_base_profiles_dir();
-
     let accounts = vec![
         Account {
             id: "acc-1".to_string(),
@@ -36,7 +33,7 @@ pub fn get_seed_data() -> FleetState {
             daily_cap: 50.00,
             active_ides: 0,
             max_ides: 5,
-            instances_linked: 2,
+            instances_linked: 0,
             status: "active".to_string(),
         },
         Account {
@@ -54,7 +51,7 @@ pub fn get_seed_data() -> FleetState {
             daily_cap: 50.00,
             active_ides: 0,
             max_ides: 10,
-            instances_linked: 1,
+            instances_linked: 0,
             status: "warning".to_string(),
         },
         Account {
@@ -77,65 +74,7 @@ pub fn get_seed_data() -> FleetState {
         },
     ];
 
-    let instances = vec![
-        Instance {
-            id: "inst-1".to_string(),
-            name: "Frontend Monorepo".to_string(),
-            account_id: "acc-1".to_string(),
-            mode: "auth-only".to_string(),
-            port: 9100,
-            status: "stopped".to_string(),
-            tokens_str: "6.8M tokens".to_string(),
-            workspace_path: Some(r"E:\Projects\Vibe Coded Projects\bettermultigravity".to_string()),
-            profile_dir: profiles_base.join("FrontendMonorepo").to_string_lossy().to_string(),
-            pid: None,
-            last_used: "12m ago".to_string(),
-            binary_path: None,
-            custom_flags: None,
-            env_vars: None,
-            app_type: Some("antigravity_ide".to_string()),
-            blackhole_sync: None,
-            sync_mode: Some("solar_system".to_string()),
-        },
-        Instance {
-            id: "inst-2".to_string(),
-            name: "Core Agent Engine".to_string(),
-            account_id: "acc-1".to_string(),
-            mode: "auth-only".to_string(),
-            port: 9101,
-            status: "stopped".to_string(),
-            tokens_str: "7.4M tokens".to_string(),
-            workspace_path: None,
-            profile_dir: profiles_base.join("CoreAgentEngine").to_string_lossy().to_string(),
-            pid: None,
-            last_used: "2h ago".to_string(),
-            binary_path: None,
-            custom_flags: None,
-            env_vars: None,
-            app_type: Some("antigravity".to_string()),
-            blackhole_sync: None,
-            sync_mode: Some("solar_system".to_string()),
-        },
-        Instance {
-            id: "inst-3".to_string(),
-            name: "Telemetry & Pipeline".to_string(),
-            account_id: "acc-2".to_string(),
-            mode: "full".to_string(),
-            port: 9102,
-            status: "stopped".to_string(),
-            tokens_str: "88.5M tokens".to_string(),
-            workspace_path: None,
-            profile_dir: profiles_base.join("TelemetryPipeline").to_string_lossy().to_string(),
-            pid: None,
-            last_used: "Yesterday".to_string(),
-            binary_path: None,
-            custom_flags: None,
-            env_vars: None,
-            app_type: Some("antigravity_ide".to_string()),
-            blackhole_sync: None,
-            sync_mode: Some("solar_system".to_string()),
-        },
-    ];
+    let instances = Vec::new();
 
     FleetState {
         accounts,

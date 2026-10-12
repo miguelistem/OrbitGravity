@@ -50,16 +50,61 @@ fn test_system_extensions_dir() {
 fn test_seed_data_and_stat_sync() {
     let mut state = get_seed_data();
     assert_eq!(state.accounts.len(), 3);
-    assert_eq!(state.instances.len(), 3);
+    assert_eq!(state.instances.len(), 0);
 
     sync_account_stats(&mut state);
 
     let acc1 = state.accounts.iter().find(|a| a.id == "acc-1").unwrap();
-    assert_eq!(acc1.instances_linked, 2);
+    assert_eq!(acc1.instances_linked, 0);
     assert_eq!(acc1.active_ides, 0);
 
+    // Dynamically add instances in memory to test stat synchronization
+    state.instances.push(Instance {
+        id: "test-inst-1".to_string(),
+        name: "Test Instance 1".to_string(),
+        account_id: "acc-1".to_string(),
+        mode: "auth-only".to_string(),
+        port: 9100,
+        status: "stopped".to_string(),
+        tokens_str: "0.0M tokens".to_string(),
+        workspace_path: None,
+        profile_dir: "C:\\Fake\\Profile1".to_string(),
+        pid: None,
+        last_used: "Now".to_string(),
+        binary_path: None,
+        custom_flags: None,
+        env_vars: None,
+        app_type: Some("antigravity_ide".to_string()),
+        blackhole_sync: None,
+        sync_mode: Some("solar_system".to_string()),
+    });
+    state.instances.push(Instance {
+        id: "test-inst-2".to_string(),
+        name: "Test Instance 2".to_string(),
+        account_id: "acc-1".to_string(),
+        mode: "auth-only".to_string(),
+        port: 9101,
+        status: "running".to_string(),
+        tokens_str: "0.0M tokens".to_string(),
+        workspace_path: None,
+        profile_dir: "C:\\Fake\\Profile2".to_string(),
+        pid: Some(1234),
+        last_used: "Now".to_string(),
+        binary_path: None,
+        custom_flags: None,
+        env_vars: None,
+        app_type: Some("antigravity_ide".to_string()),
+        blackhole_sync: None,
+        sync_mode: Some("solar_system".to_string()),
+    });
+
+    sync_account_stats(&mut state);
+    let acc1_updated = state.accounts.iter().find(|a| a.id == "acc-1").unwrap();
+    assert_eq!(acc1_updated.instances_linked, 2);
+    assert_eq!(acc1_updated.active_ides, 1);
+
     let acc2 = state.accounts.iter().find(|a| a.id == "acc-2").unwrap();
-    assert_eq!(acc2.instances_linked, 1);
+    assert_eq!(acc2.instances_linked, 0);
     assert_eq!(acc2.status, "warning"); // Because 88.5M is > 85% of 100M tokens_max
 }
 
