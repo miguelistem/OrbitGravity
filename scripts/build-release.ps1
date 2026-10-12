@@ -73,10 +73,14 @@ if (Test-Path $mainExe) {
     Write-Host "[+] Staged Portable Archive: OrbitGravity_1.0.0_Portable.zip" -ForegroundColor Green
 }
 
-# 6. Copy install.ps1 to release directory
+# 6. Copy install.ps1 and uninstall.ps1 to release directory
 $scriptSrc = Join-Path $rootDir "scripts\install.ps1"
 if (Test-Path $scriptSrc) {
     Copy-Item -Path $scriptSrc -Destination (Join-Path $releaseDir "install.ps1") -Force
+}
+$uninstallSrc = Join-Path $rootDir "scripts\uninstall.ps1"
+if (Test-Path $uninstallSrc) {
+    Copy-Item -Path $uninstallSrc -Destination (Join-Path $releaseDir "uninstall.ps1") -Force
 }
 
 # 7. Generate SHA256 Checksums

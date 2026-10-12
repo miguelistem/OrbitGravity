@@ -1,6 +1,7 @@
 ; ==============================================================================
 ; OrbitGravity — NSIS Installer Hooks
 ; Ensures desktop shortcut creation in current-user space with clean uninstall
+; and complete removal of all Antigravity profile directories on uninstallation.
 ; ==============================================================================
 
 !macro NSIS_HOOK_POSTINSTALL
@@ -8,7 +9,20 @@
   CreateShortcut "$DESKTOP\OrbitGravity.lnk" "$INSTDIR\OrbitGravity.exe" "" "$INSTDIR\OrbitGravity.exe" 0
 !macroend
 
+!macro NSIS_HOOK_PREUNINSTALL
+  ; Terminate any running OrbitGravity instances before removing files
+  ExecWait 'taskkill.exe /F /IM OrbitGravity.exe' $0
+!macroend
+
 !macro NSIS_HOOK_POSTUNINSTALL
   ; Clean up Desktop Shortcut upon uninstallation
   Delete "$DESKTOP\OrbitGravity.lnk"
+
+  ; Clean up all Antigravity profiles and shared brains created by OrbitGravity
+  RMDir /r "$PROFILE\AntigravityProfiles"
+
+  ; Clean up OrbitGravity and BetterMultigravity application state and telemetry
+  RMDir /r "$LOCALAPPDATA\BetterMultigravity"
+  RMDir /r "$LOCALAPPDATA\OrbitGravity"
+  RMDir /r "$APPDATA\OrbitGravity"
 !macroend
