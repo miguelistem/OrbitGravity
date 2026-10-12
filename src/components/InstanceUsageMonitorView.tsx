@@ -115,6 +115,7 @@ function CircularUsageRing({ fraction, percentage }: { fraction: number; percent
 
 const STORAGE_QUOTAS_CACHE = 'orbitgravity_event_horizon_cache_v1';
 const STORAGE_QUOTAS_FETCHED_AT = 'orbitgravity_event_horizon_fetched_at_v1';
+const STORAGE_EVENT_HORIZON_INITIALIZED = 'orbitgravity_event_horizon_initialized_v1';
 
 function formatTimeAgo(date: Date | null): string {
   if (!date) return 'Not updated yet';
@@ -199,13 +200,18 @@ export function InstanceUsageMonitorView({
     }
   };
 
-  // Only auto-fetch if this is the first time the user ever opens the tab (no cached data)
+  // Only auto-fetch ONCE on the very first time the tab is opened. Never re-trigger on subsequent tab opens.
   useEffect(() => {
-    const cached = localStorage.getItem(STORAGE_QUOTAS_CACHE);
-    if (!cached || quotas.length === 0) {
-      fetchQuotas();
+    const initialized = localStorage.getItem(STORAGE_EVENT_HORIZON_INITIALIZED);
+    if (!initialized) {
+      try {
+        localStorage.setItem(STORAGE_EVENT_HORIZON_INITIALIZED, 'true');
+      } catch {}
+      if (instances.length > 0) {
+        fetchQuotas();
+      }
     }
-  }, [fetchQuotas]);
+  }, [fetchQuotas, instances.length]);
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#0F1012] text-zinc-200">

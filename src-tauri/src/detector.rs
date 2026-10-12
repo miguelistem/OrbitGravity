@@ -28,12 +28,17 @@ pub fn detect_all_antigravity_binaries() -> Vec<AntigravityBinaryInfo> {
     let mut found: Vec<AntigravityBinaryInfo> = Vec::new();
     let mut seen_paths: std::collections::HashSet<String> = std::collections::HashSet::new();
 
-    let mut check_and_add = |name: &str, kind: &str, path: PathBuf| {
+    let mut has_ide = false;
+    let mut has_app = false;
+
+    let mut check_and_add = |name: &str, kind: &str, path: PathBuf, ide_flag: &mut bool, app_flag: &mut bool| {
         if path.exists() && path.is_file() {
             let canonical = path.to_string_lossy().to_string();
             let lower = canonical.to_lowercase();
             if !seen_paths.contains(&lower) {
                 seen_paths.insert(lower);
+                if kind == "ide" { *ide_flag = true; }
+                if kind == "app" { *app_flag = true; }
                 found.push(AntigravityBinaryInfo {
                     name: name.to_string(),
                     path: canonical,
@@ -45,52 +50,54 @@ pub fn detect_all_antigravity_binaries() -> Vec<AntigravityBinaryInfo> {
 
     // 1. User LocalAppData paths
     if let Some(local_app_data) = dirs::data_local_dir() {
-        check_and_add("Antigravity IDE", "ide", local_app_data.join("Programs").join("Antigravity IDE").join("Antigravity IDE.exe"));
-        check_and_add("Antigravity Desktop", "app", local_app_data.join("Programs").join("antigravity").join("Antigravity.exe"));
-        check_and_add("Antigravity Desktop", "app", local_app_data.join("Programs").join("antigravity").join("antigravity.exe"));
-        check_and_add("Antigravity Desktop", "app", local_app_data.join("Programs").join("Antigravity").join("Antigravity.exe"));
-        check_and_add("Antigravity IDE", "ide", local_app_data.join("Antigravity IDE").join("Antigravity IDE.exe"));
-        check_and_add("Antigravity Desktop", "app", local_app_data.join("antigravity").join("Antigravity.exe"));
+        check_and_add("Antigravity IDE", "ide", local_app_data.join("Programs").join("Antigravity IDE").join("Antigravity IDE.exe"), &mut has_ide, &mut has_app);
+        check_and_add("Antigravity Desktop", "app", local_app_data.join("Programs").join("antigravity").join("Antigravity.exe"), &mut has_ide, &mut has_app);
+        check_and_add("Antigravity Desktop", "app", local_app_data.join("Programs").join("antigravity").join("antigravity.exe"), &mut has_ide, &mut has_app);
+        check_and_add("Antigravity Desktop", "app", local_app_data.join("Programs").join("Antigravity").join("Antigravity.exe"), &mut has_ide, &mut has_app);
+        check_and_add("Antigravity IDE", "ide", local_app_data.join("Antigravity IDE").join("Antigravity IDE.exe"), &mut has_ide, &mut has_app);
+        check_and_add("Antigravity Desktop", "app", local_app_data.join("antigravity").join("Antigravity.exe"), &mut has_ide, &mut has_app);
     }
 
     // 2. User home fallback
     if let Some(home) = dirs::home_dir() {
-        check_and_add("Antigravity IDE", "ide", home.join("AppData").join("Local").join("Programs").join("Antigravity IDE").join("Antigravity IDE.exe"));
-        check_and_add("Antigravity Desktop", "app", home.join("AppData").join("Local").join("Programs").join("antigravity").join("Antigravity.exe"));
-        check_and_add("Antigravity Desktop", "app", home.join("AppData").join("Local").join("Programs").join("antigravity").join("antigravity.exe"));
-        check_and_add("Antigravity Desktop", "app", home.join("AppData").join("Local").join("Programs").join("Antigravity").join("Antigravity.exe"));
+        check_and_add("Antigravity IDE", "ide", home.join("AppData").join("Local").join("Programs").join("Antigravity IDE").join("Antigravity IDE.exe"), &mut has_ide, &mut has_app);
+        check_and_add("Antigravity Desktop", "app", home.join("AppData").join("Local").join("Programs").join("antigravity").join("Antigravity.exe"), &mut has_ide, &mut has_app);
+        check_and_add("Antigravity Desktop", "app", home.join("AppData").join("Local").join("Programs").join("antigravity").join("antigravity.exe"), &mut has_ide, &mut has_app);
+        check_and_add("Antigravity Desktop", "app", home.join("AppData").join("Local").join("Programs").join("Antigravity").join("Antigravity.exe"), &mut has_ide, &mut has_app);
     }
 
     // 3. Program Files
     if let Ok(prog_files) = std::env::var("ProgramFiles") {
         let p = PathBuf::from(prog_files);
-        check_and_add("Antigravity IDE", "ide", p.join("Antigravity IDE").join("Antigravity IDE.exe"));
-        check_and_add("Antigravity Desktop", "app", p.join("Antigravity").join("Antigravity.exe"));
+        check_and_add("Antigravity IDE", "ide", p.join("Antigravity IDE").join("Antigravity IDE.exe"), &mut has_ide, &mut has_app);
+        check_and_add("Antigravity Desktop", "app", p.join("Antigravity").join("Antigravity.exe"), &mut has_ide, &mut has_app);
     }
     if let Ok(prog_files_x86) = std::env::var("ProgramFiles(x86)") {
         let p = PathBuf::from(prog_files_x86);
-        check_and_add("Antigravity IDE", "ide", p.join("Antigravity IDE").join("Antigravity IDE.exe"));
-        check_and_add("Antigravity Desktop", "app", p.join("Antigravity").join("Antigravity.exe"));
+        check_and_add("Antigravity IDE", "ide", p.join("Antigravity IDE").join("Antigravity IDE.exe"), &mut has_ide, &mut has_app);
+        check_and_add("Antigravity Desktop", "app", p.join("Antigravity").join("Antigravity.exe"), &mut has_ide, &mut has_app);
     }
 
-    // 4. Try PATH lookup via `where.exe`
-    if let Ok(output) = std::process::Command::new("where.exe")
-        .args(["Antigravity IDE.exe", "Antigravity.exe", "antigravity.exe"])
-        .output()
-    {
-        if output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            for line in stdout.lines() {
-                let trimmed = line.trim();
-                if !trimmed.is_empty() {
-                    let path = PathBuf::from(trimmed);
-                    let name = if trimmed.to_lowercase().contains("ide") {
-                        "Antigravity IDE"
-                    } else {
-                        "Antigravity Desktop"
-                    };
-                    let kind = if trimmed.to_lowercase().contains("ide") { "ide" } else { "app" };
-                    check_and_add(name, kind, path);
+    // 4. Try PATH lookup via `where.exe` only if both kinds are not yet found
+    if !has_ide || !has_app {
+        if let Ok(output) = crate::process::silent_command("where.exe")
+            .args(["Antigravity IDE.exe", "Antigravity.exe", "antigravity.exe"])
+            .output()
+        {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                for line in stdout.lines() {
+                    let trimmed = line.trim();
+                    if !trimmed.is_empty() {
+                        let path = PathBuf::from(trimmed);
+                        let name = if trimmed.to_lowercase().contains("ide") {
+                            "Antigravity IDE"
+                        } else {
+                            "Antigravity Desktop"
+                        };
+                        let kind = if trimmed.to_lowercase().contains("ide") { "ide" } else { "app" };
+                        check_and_add(name, kind, path, &mut has_ide, &mut has_app);
+                    }
                 }
             }
         }
@@ -188,7 +195,7 @@ pub fn check_junction_support() -> bool {
         return false;
     }
 
-    let status = std::process::Command::new("cmd.exe")
+    let status = crate::process::silent_command("cmd.exe")
         .args(["/C", "mklink", "/J", link.to_str().unwrap_or(""), target.to_str().unwrap_or("")])
         .output();
 
@@ -198,7 +205,7 @@ pub fn check_junction_support() -> bool {
     };
 
     // Cleanup
-    let _ = std::process::Command::new("cmd.exe")
+    let _ = crate::process::silent_command("cmd.exe")
         .args(["/C", "rmdir", link.to_str().unwrap_or("")])
         .output();
     let _ = std::fs::remove_dir_all(&test_dir);

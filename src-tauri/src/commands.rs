@@ -31,8 +31,10 @@ pub fn get_system_info(state: State<'_, AppState>) -> Result<SystemInfo, String>
     refresh_instances_status(&mut fleet.instances);
     sync_account_stats(&mut fleet);
 
+    let binary = fleet.parent_binaries.as_ref()
+        .and_then(|pb| pb.app_path.clone().or_else(|| pb.ide_path.clone()))
+        .or_else(|| detect_antigravity_binary().map(|p| p.to_string_lossy().to_string()));
     let auth_only_count = fleet.instances.iter().filter(|i| i.mode == "auth-only").count();
-    let binary = detect_antigravity_binary().map(|p| p.to_string_lossy().to_string());
     let profiles_dir = get_base_profiles_dir().to_string_lossy().to_string();
     let junction_support = check_junction_support();
     let total_storage_saved_mb = calculate_storage_saved_mb(auth_only_count);
@@ -1028,19 +1030,41 @@ pub fn detach_instance_from_blackhole(state: State<'_, AppState>, instance_id: S
 
 #[tauri::command]
 pub fn get_cosmic_systems_overview(state: State<'_, AppState>) -> Result<crate::models::CosmicOverview, String> {
-    let fleet = state.fleet.lock().map_err(|e| e.to_string())?;
+    let mut fleet = state.fleet.lock().map_err(|e| e.to_string())?;
 
-    let (app_path, ide_path) = match &fleet.parent_binaries {
+    let (mut app_path, mut ide_path) = match &fleet.parent_binaries {
         Some(pb) => (pb.app_path.clone(), pb.ide_path.clone()),
         None => (None, None),
     };
 
-    let resolved_app = app_path.or_else(|| {
-        crate::detector::detect_binary_for_app_type("app").map(|p| p.to_string_lossy().to_string())
-    });
-    let resolved_ide = ide_path.or_else(|| {
-        crate::detector::detect_binary_for_app_type("ide").map(|p| p.to_string_lossy().to_string())
-    });
+    let mut state_changed = false;
+
+    if app_path.is_none() {
+        if let Some(p) = crate::detector::detect_binary_for_app_type("app") {
+            let s = p.to_string_lossy().to_string();
+            app_path = Some(s);
+            state_changed = true;
+        }
+    }
+    if ide_path.is_none() {
+        if let Some(p) = crate::detector::detect_binary_for_app_type("ide") {
+            let s = p.to_string_lossy().to_string();
+            ide_path = Some(s);
+            state_changed = true;
+        }
+    }
+
+    if state_changed || fleet.parent_binaries.is_none() {
+        fleet.parent_binaries = Some(crate::models::ParentBinaries {
+            app_path: app_path.clone(),
+            ide_path: ide_path.clone(),
+            custom_configured: false,
+        });
+        let _ = save_fleet_state(&fleet);
+    }
+
+    let resolved_app = app_path;
+    let resolved_ide = ide_path;
 
     let app_valid = resolved_app.as_ref().map(|p| std::path::Path::new(p).exists()).unwrap_or(false);
     let ide_valid = resolved_ide.as_ref().map(|p| std::path::Path::new(p).exists()).unwrap_or(false);

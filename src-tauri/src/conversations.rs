@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use serde::{Deserialize, Serialize};
 use crate::models::Instance;
 use crate::junction::remove_junction;
@@ -506,7 +505,7 @@ try:
 except Exception as e:
     print("[]")
 "#;
-            if let Ok(output) = Command::new("python")
+            if let Ok(output) = crate::process::silent_command("python")
                 .args(["-c", py_script, &db_path.to_string_lossy()])
                 .output()
             {
@@ -940,7 +939,7 @@ except Exception:
     pass
 "#;
 
-    let _ = Command::new("python")
+    let _ = crate::process::silent_command("python")
         .args(["-c", py_sync, &src_dir.to_string_lossy(), &dest_dir.to_string_lossy(), conversation_id])
         .output();
 }
@@ -1424,7 +1423,7 @@ try:
 except Exception:
     pass
 "#;
-        let _ = std::process::Command::new("python")
+        let _ = crate::process::silent_command("python")
             .args(["-c", py_del, &db_path.to_string_lossy(), conversation_id])
             .output();
         modified = true;

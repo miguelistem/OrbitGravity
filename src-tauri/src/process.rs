@@ -4,6 +4,18 @@ use crate::models::Instance;
 use crate::detector::detect_binary_for_app_type;
 use crate::junction::setup_profile_directories;
 
+/// Creates a Command that on Windows runs with CREATE_NO_WINDOW (0x08000000),
+/// preventing any console windows from briefly flashing or popping up.
+pub fn silent_command<S: AsRef<std::ffi::OsStr>>(program: S) -> std::process::Command {
+    let mut cmd = std::process::Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    cmd
+}
+
 /// Refreshes the running status and PIDs of all instances.
 pub fn refresh_instances_status(instances: &mut [Instance]) {
     let mut sys = System::new();
@@ -240,7 +252,7 @@ pub fn terminate_parent_antigravity_with_tracked(variant: Option<&str>, tracked_
 
     let mut killed_count = 0;
     for pid in &pids_to_kill {
-        let _ = std::process::Command::new("taskkill.exe")
+        let _ = silent_command("taskkill.exe")
             .args(["/PID", &pid.to_string(), "/T", "/F"])
             .output();
         killed_count += 1;
@@ -413,7 +425,7 @@ pub fn launch_antigravity_instance(
 pub fn stop_antigravity_instance(instance: &mut Instance) -> Result<(), String> {
     if let Some(pid) = instance.pid {
         // Kill process tree cleanly using taskkill
-        let _ = std::process::Command::new("taskkill.exe")
+        let _ = silent_command("taskkill.exe")
             .args(["/PID", &pid.to_string(), "/T", "/F"])
             .output();
     }
@@ -431,7 +443,7 @@ pub fn stop_antigravity_instance(instance: &mut Instance) -> Result<(), String> 
         let cmd: Vec<String> = proc.cmd().iter().map(|s| s.to_string_lossy().to_string()).collect();
         let cmd_str = cmd.join(" ").to_lowercase();
         if cmd_str.contains(&profile_norm) {
-            let _ = std::process::Command::new("taskkill.exe")
+            let _ = silent_command("taskkill.exe")
                 .args(["/PID", &pid.as_u32().to_string(), "/T", "/F"])
                 .output();
         }

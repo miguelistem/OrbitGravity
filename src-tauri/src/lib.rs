@@ -10,6 +10,8 @@ pub mod conversations;
 pub mod commands;
 pub mod quota;
 
+pub use process::silent_command;
+
 use commands::AppState;
 use storage::load_fleet_state;
 use tauri::Manager;

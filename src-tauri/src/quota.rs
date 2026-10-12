@@ -185,7 +185,7 @@ pub fn ensure_valid_access_token(token_path: &Path) -> Result<String, String> {
 
     // Try testing current access token against the quota endpoint first
     if !access_token.is_empty() {
-        if let Ok(output) = std::process::Command::new("curl.exe")
+        if let Ok(output) = crate::process::silent_command("curl.exe")
             .args([
                 "-s",
                 "-w", "\n%{http_code}",
@@ -221,7 +221,7 @@ pub fn ensure_valid_access_token(token_path: &Path) -> Result<String, String> {
         CLIENT_ID, get_client_secret(), refresh_token
     );
 
-    let output = std::process::Command::new("curl.exe")
+    let output = crate::process::silent_command("curl.exe")
         .args([
             "-s",
             "-X", "POST",
@@ -295,7 +295,7 @@ pub fn fetch_instance_quota(instance: &Instance) -> InstanceQuotaResult {
     };
 
     // Query retrieveUserQuotaSummary
-    let output = match std::process::Command::new("curl.exe")
+    let output = match crate::process::silent_command("curl.exe")
         .args([
             "-s",
             "-w", "\n%{http_code}",

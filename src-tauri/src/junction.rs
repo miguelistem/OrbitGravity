@@ -23,7 +23,7 @@ pub fn create_junction(link: &Path, target: &Path) -> Result<(), String> {
     let link_str = link.to_str().ok_or("Invalid link path unicode")?;
     let target_str = target.to_str().ok_or("Invalid target path unicode")?;
 
-    let output = std::process::Command::new("cmd.exe")
+    let output = crate::process::silent_command("cmd.exe")
         .args(["/C", "mklink", "/J", link_str, target_str])
         .output()
         .map_err(|e| format!("Failed to execute mklink command: {}", e))?;
@@ -46,7 +46,7 @@ pub fn remove_junction(link: &Path) -> Result<(), String> {
     }
 
     let link_str = link.to_str().ok_or("Invalid link path")?;
-    let output = std::process::Command::new("cmd.exe")
+    let output = crate::process::silent_command("cmd.exe")
         .args(["/C", "rmdir", link_str])
         .output()
         .map_err(|e| format!("Failed to execute rmdir: {}", e))?;

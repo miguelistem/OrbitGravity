@@ -37,8 +37,15 @@ export function CosmicSystemsManager({
   onOpenNebula,
   onAddLog,
 }: CosmicSystemsManagerProps) {
-  const [overview, setOverview] = useState<CosmicOverview | null>(null);
-  const [loading, setLoading] = useState(true);
+  const STORAGE_COSMIC_OVERVIEW = 'orbitgravity_cosmic_overview_cache_v1';
+  const [overview, setOverview] = useState<CosmicOverview | null>(() => {
+    try {
+      const cached = localStorage.getItem(STORAGE_COSMIC_OVERVIEW);
+      if (cached) return JSON.parse(cached);
+    } catch {}
+    return null;
+  });
+  const [loading, setLoading] = useState(false);
   const [isBinariesModalOpen, setIsBinariesModalOpen] = useState(false);
   const [syncingAll, setSyncingAll] = useState(false);
   const [launchingApp, setLaunchingApp] = useState(false);
@@ -47,11 +54,13 @@ export function CosmicSystemsManager({
   const [copiedPath, setCopiedPath] = useState<string | null>(null);
 
   const fetchOverview = async () => {
-    setLoading(true);
     try {
       if (isTauri()) {
         const res = await invoke<CosmicOverview>('get_cosmic_systems_overview');
         setOverview(res);
+        try {
+          localStorage.setItem(STORAGE_COSMIC_OVERVIEW, JSON.stringify(res));
+        } catch {}
       } else {
         // High-fidelity dynamic mock preview for web browsers
         const systemsMap: Record<string, AntigravityInstance[]> = {};

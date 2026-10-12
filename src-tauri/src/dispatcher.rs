@@ -43,7 +43,7 @@ pub fn read_registry_protocol_command(key_name: &str) -> Option<String> {
         r#"(Get-ItemProperty 'HKCU:\Software\Classes\{}\shell\open\command' -ErrorAction SilentlyContinue).'(default)'"#,
         key_name
     );
-    let output = Command::new("powershell")
+    let output = crate::process::silent_command("powershell")
         .args(["-NoProfile", "-Command", &script])
         .output()
         .ok()?;
@@ -68,7 +68,7 @@ pub fn write_registry_protocol_command(key_name: &str, command_val: &str) -> Res
         key_name,
         command_val.replace('\'', "''")
     );
-    let output = Command::new("powershell")
+    let output = crate::process::silent_command("powershell")
         .args(["-NoProfile", "-Command", &script])
         .output()
         .map_err(|e| format!("Failed to execute PowerShell: {}", e))?;

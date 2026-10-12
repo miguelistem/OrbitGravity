@@ -33,7 +33,7 @@ pub fn create_windows_shortcut(
         desc = ps_escape(description),
     );
 
-    let output = std::process::Command::new("powershell.exe")
+    let output = crate::process::silent_command("powershell.exe")
         .args(["-NoProfile", "-NonInteractive", "-Command", &script])
         .output()
         .map_err(|e| format!("Failed to invoke PowerShell for shortcut creation: {}", e))?;
@@ -177,7 +177,7 @@ pub fn create_instance_desktop_shortcut(
         name = ps_escape(&instance.name),
     );
 
-    let output = std::process::Command::new("powershell.exe")
+    let output = crate::process::silent_command("powershell.exe")
         .args(["-NoProfile", "-NonInteractive", "-Command", &script])
         .output()
         .map_err(|e| format!("Failed to invoke PowerShell for shortcut creation: {}", e))?;
