@@ -339,6 +339,7 @@ pub fn create_instance(
 }
 
 #[tauri::command]
+#[allow(unused_variables)]
 pub fn update_instance(
     state: State<'_, AppState>,
     id: String,
@@ -409,18 +410,8 @@ pub fn update_instance(
             instance.name = n;
         }
     }
-    if let Some(t) = tag {
-        instance.tag = Some(t);
-    }
     if let Some(acc) = account_id {
         instance.account_id = acc;
-    }
-    if let Some(m) = mode {
-        instance.mode = m;
-    }
-    if let Some(ws) = workspace_path {
-        let expanded = crate::detector::expand_path_str(&ws);
-        instance.workspace_path = Some(expanded.to_string_lossy().to_string());
     }
     if let Some(flags) = custom_flags {
         instance.custom_flags = Some(flags);
@@ -428,25 +419,11 @@ pub fn update_instance(
     if let Some(envs) = env_vars {
         instance.env_vars = Some(envs);
     }
-    if let Some(at) = app_type {
-        instance.app_type = Some(at);
-    }
     if let Some(tr) = tier {
         instance.tier = Some(tr);
     }
-    if let Some(sm) = sync_mode {
-        if sm == "black_hole" {
-            instance.blackhole_sync = Some(true);
-        } else {
-            instance.blackhole_sync = Some(false);
-        }
-        instance.sync_mode = Some(sm);
-    } else if let Some(bhs) = blackhole_sync {
-        instance.blackhole_sync = Some(bhs);
-        if bhs {
-            instance.sync_mode = Some("black_hole".to_string());
-        }
-    }
+    // Architecture & sync topology (mode, workspace_path, app_type, sync_mode, blackhole_sync, tag)
+    // are locked after creation to preserve NTFS junctions and Star Brain filesystem integrity.
 
     // Refresh launch.bat if profile dir exists
     let target_bin = match &instance.binary_path {
@@ -806,11 +783,92 @@ pub fn transfer_conversation(
     let src = fleet.instances.iter().find(|i| i.id == from_instance_id)
         .ok_or_else(|| format!("Source instance '{}' not found", from_instance_id))?
         .clone();
+
+    // 1. SOURCE INSTANCE CHECK: Source instance must NOT be running
+    if src.status == "running" {
+        return Err(format!(
+            "Cannot transfer conversation: source instance '{}' is currently running. Both source and destination instances must be stopped before transferring.",
+            src.name
+        ));
+    }
+
+    let tracked_pids = state.active_parent_pids.lock().ok()
+        .map(|p| p.iter().cloned().collect::<Vec<_>>())
+        .unwrap_or_default();
+    let is_parent_running = crate::process::is_parent_antigravity_running_with_tracked(Some(&tracked_pids));
+
+    // Check if source's connected brain / tethered peers are running
+    let is_src_bh = src.blackhole_sync == Some(true) || src.sync_mode.as_deref() == Some("black_hole");
+    let is_src_solo = src.sync_mode.as_deref() == Some("solo");
+
+    if is_src_bh {
+        if is_parent_running {
+            return Err("Cannot transfer conversation: Parent Antigravity application is currently running. Please terminate/close the parent application before transferring.".to_string());
+        }
+        for inst in &fleet.instances {
+            if inst.id != src.id && inst.status == "running" && (inst.blackhole_sync == Some(true) || inst.sync_mode.as_deref() == Some("black_hole")) {
+                return Err(format!(
+                    "Cannot transfer conversation: Black Hole tethered instance '{}' is currently running. All tethered instances must be stopped first.",
+                    inst.name
+                ));
+            }
+        }
+    } else if !is_src_solo {
+        let src_group = crate::conversations::get_instance_solar_group(&src);
+        for inst in &fleet.instances {
+            if inst.id != src.id && inst.status == "running" {
+                let is_bh = inst.blackhole_sync == Some(true) || inst.sync_mode.as_deref() == Some("black_hole");
+                let is_solo = inst.sync_mode.as_deref() == Some("solo");
+                if is_bh || is_solo { continue; }
+                let g = crate::conversations::get_instance_solar_group(inst);
+                if g.eq_ignore_ascii_case(&src_group) {
+                    return Err(format!(
+                        "Cannot transfer conversation: instance '{}' in source Solar System '{}' is currently running. All instances in the source brain must be stopped before transferring.",
+                        inst.name, src_group
+                    ));
+                }
+            }
+        }
+    }
+
+    // 2. DESTINATION CHECK: The Black Hole vs. Fleet Instance
+    let is_dest_blackhole = to_instance_id == "blackhole"
+        || to_instance_id == "the_black_hole"
+        || to_instance_id == "parent";
+
+    if is_dest_blackhole {
+        if is_parent_running {
+            return Err("Cannot transfer conversation: Parent Antigravity application is currently running. Please terminate/close the parent application before transferring to The Black Hole.".to_string());
+        }
+        for inst in &fleet.instances {
+            if inst.status == "running" && (inst.blackhole_sync == Some(true) || inst.sync_mode.as_deref() == Some("black_hole")) {
+                return Err(format!(
+                    "Cannot transfer conversation: Black Hole tethered instance '{}' is currently running. Please stop it first.",
+                    inst.name
+                ));
+            }
+        }
+
+        let src_atype = src.app_type.as_deref().unwrap_or("antigravity");
+        crate::conversations::copy_conversation_to_target_global(
+            Some(&src.profile_dir),
+            src_atype,
+            &conversation_id,
+        )?;
+
+        // Automatically synchronize with all Black Hole tethered instances
+        let _ = crate::conversations::sync_black_hole_fleet(&fleet.instances);
+
+        sync_account_stats(&mut fleet);
+        save_fleet_state(&fleet)?;
+        return Ok(true);
+    }
+
     let dest = fleet.instances.iter().find(|i| i.id == to_instance_id)
         .ok_or_else(|| format!("Destination instance '{}' not found", to_instance_id))?
         .clone();
 
-    // 1. Destination instance must NOT be running
+    // Destination instance must NOT be running
     if dest.status == "running" {
         return Err(format!(
             "Cannot transfer conversation: destination instance '{}' is currently running. Please terminate/stop it before transferring.",
@@ -818,16 +876,13 @@ pub fn transfer_conversation(
         ));
     }
 
-    // 2. If destination is part of a brain, all instances in that brain must be terminated
+    // If destination is part of a brain, all instances in that brain must be terminated
     let is_dest_bh = dest.blackhole_sync == Some(true) || dest.sync_mode.as_deref() == Some("black_hole");
     let is_dest_solo = dest.sync_mode.as_deref() == Some("solo");
 
     if is_dest_bh {
         // Black Hole mutual exclusion: neither parent app nor any Black Hole instance can be running
-        let tracked_pids = state.active_parent_pids.lock().ok()
-            .map(|p| p.iter().cloned().collect::<Vec<_>>())
-            .unwrap_or_default();
-        if crate::process::is_parent_antigravity_running_with_tracked(Some(&tracked_pids)) {
+        if is_parent_running {
             return Err("Cannot transfer conversation: Parent Antigravity application is currently running. Please terminate/close the parent application before transferring to a Black Hole tethered instance.".to_string());
         }
 
@@ -1039,14 +1094,23 @@ pub fn get_cosmic_systems_overview(state: State<'_, AppState>) -> Result<crate::
 
     let mut state_changed = false;
 
-    if app_path.is_none() {
+    let app_needs_detection = match &app_path {
+        Some(p) => !crate::detector::expand_path_str(p).exists(),
+        None => true,
+    };
+    if app_needs_detection {
         if let Some(p) = crate::detector::detect_binary_for_app_type("app") {
             let s = p.to_string_lossy().to_string();
             app_path = Some(s);
             state_changed = true;
         }
     }
-    if ide_path.is_none() {
+
+    let ide_needs_detection = match &ide_path {
+        Some(p) => !crate::detector::expand_path_str(p).exists(),
+        None => true,
+    };
+    if ide_needs_detection {
         if let Some(p) = crate::detector::detect_binary_for_app_type("ide") {
             let s = p.to_string_lossy().to_string();
             ide_path = Some(s);
@@ -1066,8 +1130,8 @@ pub fn get_cosmic_systems_overview(state: State<'_, AppState>) -> Result<crate::
     let resolved_app = app_path;
     let resolved_ide = ide_path;
 
-    let app_valid = resolved_app.as_ref().map(|p| std::path::Path::new(p).exists()).unwrap_or(false);
-    let ide_valid = resolved_ide.as_ref().map(|p| std::path::Path::new(p).exists()).unwrap_or(false);
+    let app_valid = resolved_app.as_ref().map(|p| crate::detector::expand_path_str(p).exists()).unwrap_or(false);
+    let ide_valid = resolved_ide.as_ref().map(|p| crate::detector::expand_path_str(p).exists()).unwrap_or(false);
 
     let global_convs = crate::conversations::list_conversations_for_source(None, "antigravity", true, "Black Hole");
     let global_total = global_convs.len();

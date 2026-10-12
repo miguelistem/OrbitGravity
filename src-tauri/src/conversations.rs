@@ -701,6 +701,46 @@ pub fn copy_conversation_to_target(
     Ok(())
 }
 
+/// Copies a conversation from an instance directly to the genuine Global Parent application
+/// (.gemini root in user's home profile and parent app_storage.json).
+pub fn copy_conversation_to_target_global(
+    src_profile_dir: Option<&str>,
+    src_app_type: &str,
+    conversation_id: &str,
+) -> Result<(), String> {
+    let src_gemini = resolve_gemini_app_dir(src_profile_dir, src_app_type, false);
+    let alt_src = resolve_gemini_app_dir(
+        src_profile_dir,
+        if src_app_type.contains("ide") { "antigravity" } else { "antigravity_ide" },
+        false,
+    );
+
+    let effective_src = if src_gemini.join("brain").join(conversation_id).exists()
+        || src_gemini.join("conversations").join(format!("{}.db", conversation_id)).exists() {
+        src_gemini
+    } else if alt_src.join("brain").join(conversation_id).exists()
+        || alt_src.join("conversations").join(format!("{}.db", conversation_id)).exists() {
+        alt_src
+    } else {
+        src_gemini
+    };
+
+    let global_app = resolve_gemini_app_dir(None, "antigravity", true);
+    let global_ide = resolve_gemini_app_dir(None, "antigravity_ide", true);
+
+    // Copy full conversation assets to both parent variants
+    for target_dir in &[&global_app, &global_ide] {
+        copy_conversation_assets(&effective_src, target_dir, conversation_id);
+    }
+
+    // Extract layout from source storage and inject into parent storage paths
+    let layout_val = extract_conversation_layout_from_storage(src_profile_dir, false, conversation_id);
+    let parent_storage_paths = find_parent_app_storage_paths();
+    inject_conversation_layout_to_storage(conversation_id, layout_val.as_deref(), &parent_storage_paths);
+
+    Ok(())
+}
+
 /// Extracts step count and timestamp from conversation transcript.
 pub fn get_conversation_step_count(conv_dir: &Path) -> (i64, String) {
     let transcript = conv_dir.join(".system_generated").join("logs").join("transcript.jsonl");

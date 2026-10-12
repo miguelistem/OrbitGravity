@@ -280,9 +280,99 @@ export function AntigravityWorkspace({
     }
   };
 
+  const getTransferBlockReason = (tgt: {
+    id: string;
+    name: string;
+    tag?: string;
+    status?: string;
+    blackholeSync?: boolean;
+    syncMode?: string;
+  }): string | null => {
+    // 1. Check Source instance itself: must NOT be running
+    if (instance.status === 'running') {
+      return 'Source instance running';
+    }
+
+    // 2. Check Source instance's connected peers
+    const isSrcBh = instance.blackholeSync || instance.syncMode === 'black_hole';
+    const isSrcSolo = instance.syncMode === 'solo';
+
+    if (isSrcBh) {
+      if (parentRunning) {
+        return 'Parent App active';
+      }
+      const runningBh = instances.find(
+        (i) => i.id !== instance.id && (i.blackholeSync || i.syncMode === 'black_hole') && i.status === 'running'
+      );
+      if (runningBh) {
+        return `Tethered '${runningBh.name}' running`;
+      }
+    } else if (!isSrcSolo) {
+      const srcGroup = instance.tag || 'Projects';
+      const runningPeer = instances.find((i) => {
+        if (i.id === instance.id || i.status !== 'running') return false;
+        const isBh = i.blackholeSync || i.syncMode === 'black_hole';
+        const isSolo = i.syncMode === 'solo';
+        if (isBh || isSolo) return false;
+        return (i.tag || 'Projects').toLowerCase() === srcGroup.toLowerCase();
+      });
+      if (runningPeer) {
+        return `Source brain '${runningPeer.name}' running`;
+      }
+    }
+
+    // 3. Check Destination: The Black Hole vs fleet instance
+    if (tgt.id === 'blackhole') {
+      if (parentRunning) {
+        return 'Parent Antigravity app active';
+      }
+      const runningBh = instances.find(
+        (i) => (i.blackholeSync || i.syncMode === 'black_hole') && i.status === 'running'
+      );
+      if (runningBh) {
+        return `Black Hole instance '${runningBh.name}' running`;
+      }
+      return null;
+    }
+
+    // Destination is another fleet instance
+    if (tgt.status === 'running') {
+      return 'Target instance running';
+    }
+
+    const isTgtBh = tgt.blackholeSync || tgt.syncMode === 'black_hole';
+    const isTgtSolo = tgt.syncMode === 'solo';
+
+    if (isTgtBh) {
+      if (parentRunning) {
+        return 'Parent Antigravity active';
+      }
+      const runningBh = instances.find(
+        (i) => (i.blackholeSync || i.syncMode === 'black_hole') && i.status === 'running'
+      );
+      if (runningBh) {
+        return `Tethered '${runningBh.name}' running`;
+      }
+    } else if (!isTgtSolo) {
+      const tgtGroup = tgt.tag || 'Projects';
+      const runningPeer = instances.find((i) => {
+        if (i.status !== 'running') return false;
+        const isBh = i.blackholeSync || i.syncMode === 'black_hole';
+        const isSolo = i.syncMode === 'solo';
+        if (isBh || isSolo) return false;
+        return (i.tag || 'Projects').toLowerCase() === tgtGroup.toLowerCase();
+      });
+      if (runningPeer) {
+        return `Destination brain '${runningPeer.name}' running`;
+      }
+    }
+
+    return null;
+  };
+
   const handleTransferConversation = async (
     convId: string,
-    targetInstance: AntigravityInstance,
+    targetInstance: AntigravityInstance | { id: string; name: string; tag?: string },
     convTitle?: string
   ) => {
     try {
@@ -1355,58 +1445,81 @@ export function AntigravityWorkspace({
                               </button>
                             )}
 
-                          {/* Dropdown Menu of Other Instances */}
+                          {/* Dropdown Menu of Destination Targets */}
                           {isMenuOpen && (
-                            <div className="absolute right-0 bottom-full mb-1.5 w-56 bg-[#16171C] border border-[#282B36] rounded-lg shadow-2xl py-1 z-30 text-xs">
-                              <div className="px-3 py-1.5 text-[10px] font-mono text-zinc-500 uppercase tracking-wider border-b border-[#21232C]">
-                                Clone to Target Instance:
+                            <div className="absolute right-0 bottom-full mb-1.5 w-60 bg-[#16171C] border border-[#282B36] rounded-lg shadow-2xl py-1 z-30 text-xs">
+                              <div className="px-3 py-1.5 text-[10px] font-mono text-zinc-500 uppercase tracking-wider border-b border-[#21232C] flex items-center justify-between">
+                                <span>Transfer To Destination:</span>
+                                <span className="text-[9px] text-zinc-500 font-sans">Both must be stopped</span>
                               </div>
+
+                              {/* Option 1: The Black Hole (Parent App) if not already tethered */}
+                              {!(instance.blackholeSync || instance.syncMode === 'black_hole') && (() => {
+                                const bhTarget = {
+                                  id: 'blackhole',
+                                  name: 'The Black Hole (Parent App)',
+                                  tag: 'Parent App (%USERPROFILE%\\.gemini)',
+                                };
+                                const bhReason = getTransferBlockReason(bhTarget);
+                                const isBhBlocked = !!bhReason;
+
+                                return (
+                                  <button
+                                    key="blackhole-target"
+                                    type="button"
+                                    onClick={() => {
+                                      if (isBhBlocked) {
+                                        setTransferDropdownConvId(null);
+                                        setTransferErrorModal({
+                                          isOpen: true,
+                                          targetName: bhTarget.name,
+                                          conversationTitle: conv.title,
+                                          errorMessage: `Cannot transfer conversation to The Black Hole: ${bhReason}. Both source and destination parties (including any tethered instances or connected brain peers) must be stopped before transferring.`,
+                                        });
+                                        return;
+                                      }
+                                      handleTransferConversation(conv.id, bhTarget, conv.title);
+                                    }}
+                                    className={`w-full text-left px-3 py-2 flex items-center justify-between transition cursor-pointer border-b border-[#21232C] ${
+                                      isBhBlocked
+                                        ? 'hover:bg-rose-950/30 text-zinc-400'
+                                        : 'hover:bg-purple-950/40 text-purple-200 hover:text-white'
+                                    }`}
+                                    title={
+                                      isBhBlocked
+                                        ? `Cannot transfer: ${bhReason}. Both parties must be stopped first.`
+                                        : 'Transfer conversation directly to your genuine Parent Antigravity application (%USERPROFILE%\\.gemini)'
+                                    }
+                                  >
+                                    <div className="truncate pr-2">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-xs">🕳️</span>
+                                        <span className="font-semibold text-purple-300 truncate">The Black Hole (Parent App)</span>
+                                        {isBhBlocked && (
+                                          <span className="text-[9px] px-1 py-0.2 rounded bg-rose-950/70 border border-rose-800 text-rose-300 font-mono">
+                                            {bhReason}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <span className="text-[10px] text-zinc-500 block truncate font-sans">
+                                        Parent Root • %USERPROFILE%\.gemini
+                                      </span>
+                                    </div>
+                                    <ArrowRight className={`w-3.5 h-3.5 shrink-0 ${isBhBlocked ? 'text-rose-500/70' : 'text-purple-400'}`} />
+                                  </button>
+                                );
+                              })()}
+
+                              {/* Option 2: Other Instances */}
                               {otherInstances.length > 0 ? (
                                 otherInstances.map((tgt) => {
-                                  const isTargetRunning = tgt.status === 'running';
-                                  const isTargetBh = tgt.blackholeSync || tgt.syncMode === 'black_hole';
-                                  const isTargetSolo = tgt.syncMode === 'solo';
-
-                                  let isBlocked = isTargetRunning;
-                                  let blockReason = isTargetRunning ? 'Running' : '';
-
-                                  if (!isBlocked) {
-                                    if (isTargetBh) {
-                                      if (parentRunning) {
-                                        isBlocked = true;
-                                        blockReason = 'Parent active';
-                                      } else {
-                                        const otherBh = instances.find(
-                                          (i) =>
-                                            (i.blackholeSync || i.syncMode === 'black_hole') &&
-                                            i.status === 'running'
-                                        );
-                                        if (otherBh) {
-                                          isBlocked = true;
-                                          blockReason = `Tethered '${otherBh.name}' running`;
-                                        }
-                                      }
-                                    } else if (!isTargetSolo) {
-                                      const tgtGroup = tgt.tag || 'General';
-                                      const runningPeer = instances.find((i) => {
-                                        const isBh = i.blackholeSync || i.syncMode === 'black_hole';
-                                        const isSolo = i.syncMode === 'solo';
-                                        if (isBh || isSolo) return false;
-                                        return (
-                                          (i.tag || 'General').toLowerCase() === tgtGroup.toLowerCase() &&
-                                          i.status === 'running'
-                                        );
-                                      });
-                                      if (runningPeer) {
-                                        isBlocked = true;
-                                        blockReason = `Brain '${runningPeer.name}' running`;
-                                      }
-                                    }
-                                  }
+                                  const blockReason = getTransferBlockReason(tgt);
+                                  const isBlocked = !!blockReason;
 
                                   return (
                                     <button
                                       key={tgt.id}
+                                      type="button"
                                       onClick={() => {
                                         if (isBlocked) {
                                           setTransferDropdownConvId(null);
@@ -1414,7 +1527,7 @@ export function AntigravityWorkspace({
                                             isOpen: true,
                                             targetName: tgt.name,
                                             conversationTitle: conv.title,
-                                            errorMessage: `Cannot transfer conversation to '${tgt.name}': ${blockReason}. All instances in the destination brain must be closed/terminated first.`,
+                                            errorMessage: `Cannot transfer conversation to '${tgt.name}': ${blockReason}. Both source and destination parties (including any tethered instances or connected brain peers) must be stopped before transferring.`,
                                           });
                                           return;
                                         }
@@ -1427,7 +1540,7 @@ export function AntigravityWorkspace({
                                       }`}
                                       title={
                                         isBlocked
-                                          ? `Cannot transfer: ${blockReason}. All instances in destination brain must be terminated first.`
+                                          ? `Cannot transfer: ${blockReason}. Both parties must be stopped first.`
                                           : `Transfer conversation to ${tgt.name} and auto-sync destination brain`
                                       }
                                     >
@@ -1435,7 +1548,7 @@ export function AntigravityWorkspace({
                                         <div className="flex items-center gap-1.5">
                                           <span className="font-medium truncate">{tgt.name}</span>
                                           {isBlocked && (
-                                            <span className="text-[9px] px-1 py-0.2 rounded bg-rose-950/70 border border-rose-800 text-rose-300">
+                                            <span className="text-[9px] px-1 py-0.2 rounded bg-rose-950/70 border border-rose-800 text-rose-300 font-mono">
                                               {blockReason}
                                             </span>
                                           )}
@@ -1449,9 +1562,11 @@ export function AntigravityWorkspace({
                                   );
                                 })
                               ) : (
-                                <div className="px-3 py-2 text-[11px] text-zinc-500">
-                                  No other instances available.
-                                </div>
+                                (instance.blackholeSync || instance.syncMode === 'black_hole') && (
+                                  <div className="px-3 py-2 text-[11px] text-zinc-500">
+                                    No other instances available.
+                                  </div>
+                                )
                               )}
                             </div>
                           )}

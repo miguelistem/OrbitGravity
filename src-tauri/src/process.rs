@@ -1,7 +1,6 @@
 use std::path::Path;
 use sysinfo::{ProcessesToUpdate, System, Pid, ProcessRefreshKind};
 use crate::models::Instance;
-use crate::detector::detect_binary_for_app_type;
 use crate::junction::setup_profile_directories;
 
 /// Creates a Command that on Windows runs with CREATE_NO_WINDOW (0x08000000),
@@ -333,29 +332,83 @@ pub fn check_launch_concurrency_guard_with_tracked(
     Ok(())
 }
 
+/// Resolves the executable binary for an instance with comprehensive fallbacks across
+/// custom paths, parent binaries, app types, and system-wide detection.
+pub fn resolve_binary_for_instance(
+    instance: &Instance,
+    parent_binaries: Option<&crate::models::ParentBinaries>,
+) -> Option<std::path::PathBuf> {
+    // 1. If custom binary path is set on instance, expand environment placeholders and verify
+    if let Some(ref custom) = instance.binary_path {
+        let expanded = crate::detector::expand_path_str(custom);
+        if expanded.exists() && expanded.is_file() {
+            return Some(expanded);
+        }
+    }
+
+    let app_type = instance.app_type.as_deref().unwrap_or("antigravity");
+    let is_ide = app_type.to_lowercase().contains("ide");
+
+    // 2. Try parent binaries matching requested app_type, expanding env variables
+    if let Some(pb) = parent_binaries {
+        let preferred = if is_ide { pb.ide_path.as_deref() } else { pb.app_path.as_deref() };
+        if let Some(p) = preferred {
+            let expanded = crate::detector::expand_path_str(p);
+            if expanded.exists() && expanded.is_file() {
+                return Some(expanded);
+            }
+        }
+        // Fallback to the other configured parent binary if preferred isn't found
+        let fallback = if is_ide { pb.app_path.as_deref() } else { pb.ide_path.as_deref() };
+        if let Some(p) = fallback {
+            let expanded = crate::detector::expand_path_str(p);
+            if expanded.exists() && expanded.is_file() {
+                return Some(expanded);
+            }
+        }
+    }
+
+    // 3. Try detect_binary_for_app_type for requested type
+    if let Some(p) = crate::detector::detect_binary_for_app_type(app_type) {
+        if p.exists() && p.is_file() {
+            return Some(p);
+        }
+    }
+
+    // 4. Try detect_binary_for_app_type for alternate type (Desktop vs IDE)
+    let alt_type = if is_ide { "antigravity" } else { "antigravity_ide" };
+    if let Some(p) = crate::detector::detect_binary_for_app_type(alt_type) {
+        if p.exists() && p.is_file() {
+            return Some(p);
+        }
+    }
+
+    // 5. Try detect_antigravity_binary()
+    if let Some(p) = crate::detector::detect_antigravity_binary() {
+        if p.exists() && p.is_file() {
+            return Some(p);
+        }
+    }
+
+    // 6. Check all detected binaries across the system
+    let all = crate::detector::detect_all_antigravity_binaries();
+    for b in all {
+        let p = std::path::PathBuf::from(b.path);
+        if p.exists() && p.is_file() {
+            return Some(p);
+        }
+    }
+
+    None
+}
+
 /// Spawns an Antigravity instance with complete environment isolation.
 pub fn launch_antigravity_instance(
     instance: &mut Instance,
     parent_binaries: Option<&crate::models::ParentBinaries>,
 ) -> Result<(), String> {
-    let binary_path = match &instance.binary_path {
-        Some(custom) if Path::new(custom).exists() => std::path::PathBuf::from(custom),
-        _ => {
-            let app_type = instance.app_type.as_deref().unwrap_or("antigravity_ide");
-            detect_binary_for_app_type(app_type)
-                .or_else(|| {
-                    parent_binaries.and_then(|pb| {
-                        let path_str = if app_type == "antigravity" {
-                            pb.app_path.as_deref()
-                        } else {
-                            pb.ide_path.as_deref()
-                        };
-                        path_str.map(std::path::PathBuf::from).filter(|p| p.exists())
-                    })
-                })
-                .ok_or_else(|| "Antigravity binary not found on the system. Please ensure Antigravity IDE or Antigravity is installed, or configure custom executables in Cosmic Systems.".to_string())?
-        }
-    };
+    let binary_path = resolve_binary_for_instance(instance, parent_binaries)
+        .ok_or_else(|| "Antigravity binary not found on the system. Please ensure Antigravity IDE or Antigravity is installed, or configure custom executables in Cosmic Systems.".to_string())?;
 
     let profile_path_buf = crate::detector::expand_path_str(&instance.profile_dir);
     let profile_path = profile_path_buf.as_path();

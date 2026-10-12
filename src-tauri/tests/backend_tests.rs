@@ -1704,5 +1704,84 @@ fn test_solo_orbit_group_collision_and_rogue_isolation() {
     assert!(!map.contains_key("Black Hole Singularity"), "Black Hole Singularity must be excluded");
 }
 
+#[test]
+fn test_resolve_binary_for_instance_fallback_hierarchy() {
+    let mut instance = Instance {
+        id: "test-binary-res".to_string(),
+        name: "Test Binary Resolution".to_string(),
+        tag: Some("Test".to_string()),
+        account_id: "acc-1".to_string(),
+        mode: "auth-only".to_string(),
+        port: 9999,
+        status: "stopped".to_string(),
+        tokens_str: "0M".to_string(),
+        workspace_path: None,
+        profile_dir: "C:\\FakeProfile".to_string(),
+        pid: None,
+        last_used: "Never".to_string(),
+        binary_path: Some("C:\\NonExistent\\Antigravity.exe".to_string()),
+        custom_flags: None,
+        env_vars: None,
+        app_type: Some("antigravity_ide".to_string()),
+        blackhole_sync: None,
+        sync_mode: Some("solar_system".to_string()),
+        tier: Some("Pro".to_string()),
+    };
+
+    // Even if instance.binary_path points to non-existent file,
+    // resolve_binary_for_instance should fall back to detected system binaries!
+    let resolved = app_lib::process::resolve_binary_for_instance(&instance, None);
+    assert!(resolved.is_some(), "Should find a valid system binary fallback");
+    let p = resolved.unwrap();
+    assert!(p.exists(), "Resolved binary must exist on disk: {:?}", p);
+
+    // Test with parent binaries containing an invalid path and a valid path
+    let fake_pb = app_lib::models::ParentBinaries {
+        app_path: Some("C:\\Invalid\\Path.exe".to_string()),
+        ide_path: Some(p.to_string_lossy().to_string()),
+        custom_configured: true,
+    };
+    instance.app_type = Some("antigravity".to_string()); // Requested app, which is invalid in pb
+    let resolved_with_pb = app_lib::process::resolve_binary_for_instance(&instance, Some(&fake_pb));
+    assert!(resolved_with_pb.is_some(), "Should fallback to valid ide_path or system binary");
+    assert!(resolved_with_pb.unwrap().exists());
+}
+
+#[test]
+fn test_transfer_to_black_hole_and_two_party_stopped_rule() {
+    let temp_root = std::env::temp_dir().join(format!("bm_test_xfer_bh_{}", uuid::Uuid::new_v4()));
+    let src_profile = temp_root.join("src_profile");
+    let dest_profile = temp_root.join("dest_profile");
+
+    let conv_id = format!("conv-test-{}", uuid::Uuid::new_v4());
+    let src_gemini = src_profile.join(".gemini").join("antigravity");
+    let src_brain = src_gemini.join("brain").join(&conv_id);
+    let src_conv_dir = src_gemini.join("conversations");
+
+    std::fs::create_dir_all(&src_brain).expect("create src brain");
+    std::fs::create_dir_all(&src_conv_dir).expect("create src convs");
+    std::fs::write(src_brain.join("test.txt"), "hello from source").expect("write test file");
+    std::fs::write(src_conv_dir.join(format!("{}.db", conv_id)), "fake db content").expect("write db");
+
+    let dest_gemini = dest_profile.join(".gemini").join("antigravity");
+    std::fs::create_dir_all(&dest_gemini).expect("create dest gemini");
+
+    // Copy conversation assets
+    app_lib::conversations::copy_conversation_assets(&src_gemini, &dest_gemini, &conv_id);
+
+    assert!(dest_gemini.join("brain").join(&conv_id).join("test.txt").exists(), "Conversation brain files must be copied");
+    assert!(dest_gemini.join("conversations").join(format!("{}.db", conv_id)).exists(), "Conversation db must be copied");
+
+    // Test copy_conversation_to_target_global function
+    let res = app_lib::conversations::copy_conversation_to_target_global(
+        Some(&src_profile.to_string_lossy()),
+        "antigravity",
+        &conv_id,
+    );
+    assert!(res.is_ok(), "copy_conversation_to_target_global must succeed");
+
+    let _ = std::fs::remove_dir_all(&temp_root);
+}
+
 
 

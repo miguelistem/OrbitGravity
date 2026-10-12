@@ -292,19 +292,19 @@ export function InstanceModal({
       await onSave({
         name: name.trim() || 'Antigravity Session',
         description,
-        tag,
+        tag: isEditing ? (initialInstance?.tag || tag) : tag,
         color,
         icon,
         tier,
         accountId: accountId || accounts[0]?.id,
-        appType,
-        workspacePath: trimmedPath,
+        appType: isEditing ? (initialInstance?.appType || appType) : appType,
+        workspacePath: isEditing ? (initialInstance?.workspacePath || initialInstance?.profileDir || trimmedPath) : trimmedPath,
         displayMode,
         customFlags,
         envVars: envObj,
         createShortcut,
-        blackholeSync: syncMode === 'black_hole',
-        syncMode,
+        blackholeSync: isEditing ? (initialInstance?.blackholeSync ?? (syncMode === 'black_hole')) : (syncMode === 'black_hole'),
+        syncMode: isEditing ? (initialInstance?.syncMode || syncMode) : syncMode,
       }, initialImport);
       onClose();
     } catch (err) {
@@ -494,6 +494,18 @@ export function InstanceModal({
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 space-y-4 text-xs">
           {activeTab === 'general' && (
             <div className="space-y-4">
+              {isEditing && (
+                <div className="p-3 rounded-lg bg-blue-950/30 border border-blue-800/40 text-blue-300 text-xs flex items-start gap-2.5">
+                  <Lock className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                  <div className="leading-tight">
+                    <span className="font-semibold block text-zinc-200 mb-0.5">Architecture & Topology Locked</span>
+                    <span className="text-[11px] text-zinc-400 leading-relaxed block">
+                      Sync mode, category orbit, profile directory, and app architecture cannot be modified after creation to preserve Star Brain filesystem integrity. You can safely edit instance name, tier, launch flags, and environment variables.
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* Name & Category */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
@@ -539,7 +551,9 @@ export function InstanceModal({
                         hasTagError ? 'text-rose-400 font-semibold' : 'text-[#7D818C]'
                       }`}
                     >
-                      {syncMode === 'solo'
+                      {isEditing
+                        ? 'Locked (Active Orbit)'
+                        : syncMode === 'solo'
                         ? 'Must be a unique private orbit'
                         : syncMode === 'black_hole'
                         ? 'Parent Desktop installation'
@@ -549,7 +563,19 @@ export function InstanceModal({
                     </span>
                   </div>
 
-                  {syncMode === 'black_hole' ? (
+                  {isEditing ? (
+                    <div className="p-2 rounded-md bg-[#0D0E12] border border-[#23252C] flex items-center justify-between">
+                      <div className="flex items-center gap-2 truncate">
+                        <Folder className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                        <span className="font-mono text-xs text-zinc-200 truncate font-semibold">
+                          {tag}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-mono text-zinc-400 bg-zinc-800/70 px-2 py-0.5 rounded border border-zinc-700 flex items-center gap-1 shrink-0">
+                        <Lock className="w-3 h-3 text-zinc-400" /> Locked
+                      </span>
+                    </div>
+                  ) : syncMode === 'black_hole' ? (
                     <div className="p-2 rounded-md bg-[#0D0E12] border border-[#23252C] flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className="text-sm">🕳️</span>
@@ -803,50 +829,80 @@ export function InstanceModal({
 
               {/* App Type Selector */}
               <div>
-                <label className="block text-zinc-300 font-medium mb-1.5">App Type</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => setAppType('antigravity')}
-                    className={`p-3 rounded-lg border text-left transition cursor-pointer flex flex-col gap-1 ${
-                      appType === 'antigravity'
-                        ? 'bg-[#1C202C] border-emerald-500 text-white shadow-xs'
-                        : 'bg-[#141519] border-[#252730] text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-xs flex items-center gap-1.5 text-zinc-100">
-                        <Terminal className="w-3.5 h-3.5 text-emerald-400" />
-                        Antigravity
-                      </span>
-                      {appType === 'antigravity' && <Check className="w-3.5 h-3.5 text-emerald-400" />}
-                    </div>
-                    <span className="text-[10.5px] text-[#7D818C] font-mono leading-tight">
-                      Standalone desktop app (antigravity.exe)
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-zinc-300 font-medium">App Type</label>
+                  {isEditing && (
+                    <span className="text-[10px] text-zinc-500 font-mono flex items-center gap-1">
+                      <Lock className="w-3 h-3 text-zinc-400" /> Locked
                     </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setAppType('antigravity_ide')}
-                    className={`p-3 rounded-lg border text-left transition cursor-pointer flex flex-col gap-1 ${
-                      appType === 'antigravity_ide'
-                        ? 'bg-[#1C202C] border-blue-500 text-white shadow-xs'
-                        : 'bg-[#141519] border-[#252730] text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-xs flex items-center gap-1.5 text-zinc-100">
-                        <Code className="w-3.5 h-3.5 text-blue-400" />
-                        Antigravity IDE
-                      </span>
-                      {appType === 'antigravity_ide' && <Check className="w-3.5 h-3.5 text-blue-400" />}
-                    </div>
-                    <span className="text-[10.5px] text-[#7D818C] font-mono leading-tight">
-                      VS Code-based IDE variant (Antigravity IDE.exe)
-                    </span>
-                  </button>
+                  )}
                 </div>
+                {isEditing ? (
+                  <div className="p-2.5 rounded-lg bg-[#0F1012] border border-[#23252C] flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {appType === 'antigravity' ? (
+                        <Terminal className="w-4 h-4 text-emerald-400" />
+                      ) : (
+                        <Code className="w-4 h-4 text-blue-400" />
+                      )}
+                      <div>
+                        <span className="font-semibold text-xs text-zinc-200">
+                          {appType === 'antigravity' ? 'Antigravity Standalone App' : 'Antigravity IDE (VS Code variant)'}
+                        </span>
+                        <span className="block text-[10.5px] text-[#7D818C] font-mono">
+                          {appType === 'antigravity' ? 'antigravity.exe' : 'Antigravity IDE.exe'}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-mono text-zinc-400 bg-zinc-800/80 px-2 py-0.5 rounded flex items-center gap-1 border border-zinc-700">
+                      <Lock className="w-3 h-3 text-zinc-400" /> Architecture Locked
+                    </span>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setAppType('antigravity')}
+                      className={`p-3 rounded-lg border text-left transition cursor-pointer flex flex-col gap-1 ${
+                        appType === 'antigravity'
+                          ? 'bg-[#1C202C] border-emerald-500 text-white shadow-xs'
+                          : 'bg-[#141519] border-[#252730] text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-xs flex items-center gap-1.5 text-zinc-100">
+                          <Terminal className="w-3.5 h-3.5 text-emerald-400" />
+                          Antigravity
+                        </span>
+                        {appType === 'antigravity' && <Check className="w-3.5 h-3.5 text-emerald-400" />}
+                      </div>
+                      <span className="text-[10.5px] text-[#7D818C] font-mono leading-tight">
+                        Standalone desktop app (antigravity.exe)
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setAppType('antigravity_ide')}
+                      className={`p-3 rounded-lg border text-left transition cursor-pointer flex flex-col gap-1 ${
+                        appType === 'antigravity_ide'
+                          ? 'bg-[#1C202C] border-blue-500 text-white shadow-xs'
+                          : 'bg-[#141519] border-[#252730] text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-xs flex items-center gap-1.5 text-zinc-100">
+                          <Code className="w-3.5 h-3.5 text-blue-400" />
+                          Antigravity IDE
+                        </span>
+                        {appType === 'antigravity_ide' && <Check className="w-3.5 h-3.5 text-blue-400" />}
+                      </div>
+                      <span className="text-[10.5px] text-[#7D818C] font-mono leading-tight">
+                        VS Code-based IDE variant (Antigravity IDE.exe)
+                      </span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Workspace Profile Directory with Browse Button & Auto-Default Display */}
@@ -854,26 +910,37 @@ export function InstanceModal({
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-zinc-300 font-medium">Workspace Profile Directory</label>
-                    <span className="text-[10px] text-[#7D818C]">Folder opened inside Antigravity</span>
+                    <span className="text-[10px] text-[#7D818C]">
+                      {isEditing ? 'Profile path locked' : 'Folder opened inside Antigravity'}
+                    </span>
                   </div>
                   
                   <div className="relative flex items-center">
                     <input
                       type="text"
+                      readOnly={isEditing}
                       value={workspacePath}
-                      onChange={(e) => handleWorkspacePathChange(e.target.value)}
+                      onChange={(e) => !isEditing && handleWorkspacePathChange(e.target.value)}
                       placeholder={defaultWorkspacePreview}
-                      className="w-full bg-[#0F1012] border border-[#23252C] rounded-md pl-3 pr-24 py-1.5 text-zinc-200 focus:outline-none focus:border-zinc-500 font-mono text-xs placeholder-[#4B4E58]"
+                      className={`w-full bg-[#0F1012] border border-[#23252C] rounded-md pl-3 pr-24 py-1.5 text-zinc-200 focus:outline-none focus:border-zinc-500 font-mono text-xs placeholder-[#4B4E58] ${
+                        isEditing ? 'opacity-70 cursor-not-allowed bg-[#0B0C0E]' : ''
+                      }`}
                     />
-                    <button
-                      type="button"
-                      onClick={handleBrowseWorkspace}
-                      className="absolute right-1 px-2.5 py-1 bg-[#1F2229] hover:bg-[#282B34] text-zinc-200 hover:text-white rounded border border-[#2D303B] text-[11px] font-medium transition cursor-pointer flex items-center gap-1.5 shadow-xs"
-                      title="Browse folders on your computer"
-                    >
-                      <Folder className="w-3.5 h-3.5 text-zinc-400" />
-                      <span>Browse...</span>
-                    </button>
+                    {!isEditing ? (
+                      <button
+                        type="button"
+                        onClick={handleBrowseWorkspace}
+                        className="absolute right-1 px-2.5 py-1 bg-[#1F2229] hover:bg-[#282B34] text-zinc-200 hover:text-white rounded border border-[#2D303B] text-[11px] font-medium transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                        title="Browse folders on your computer"
+                      >
+                        <Folder className="w-3.5 h-3.5 text-zinc-400" />
+                        <span>Browse...</span>
+                      </button>
+                    ) : (
+                      <span className="absolute right-2 text-[10px] font-mono text-zinc-500 flex items-center gap-1">
+                        <Lock className="w-3 h-3 text-zinc-500" /> Locked
+                      </span>
+                    )}
                   </div>
 
                   <p className="text-[10.5px] text-[#6B7280] mt-1.5 leading-relaxed">
@@ -1120,14 +1187,28 @@ export function InstanceModal({
                     Gravitational Synchronization Mode
                   </label>
                   <span className="text-[10px] font-mono text-zinc-400">
-                    {syncMode === 'solo'
-                      ? 'Solo System Orbit'
-                      : syncMode === 'solar_system'
-                      ? 'In Sync with Solar System'
-                      : 'Tethered to Parent Root'}
+                    {isEditing ? (
+                      <span className="text-amber-400 font-semibold flex items-center gap-1">
+                        <Lock className="w-3 h-3 text-amber-400" /> Mode Locked After Creation
+                      </span>
+                    ) : (
+                      syncMode === 'solo'
+                        ? 'Solo System Orbit'
+                        : syncMode === 'solar_system'
+                        ? 'In Sync with Solar System'
+                        : 'Tethered to Parent Root'
+                    )}
                   </span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                {isEditing && (
+                  <div className="p-2.5 rounded-lg bg-blue-950/30 border border-blue-800/40 text-blue-300 text-xs flex items-center gap-2">
+                    <Lock className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                    <span>
+                      Synchronization topology is locked for this instance to prevent NTFS junction breakage and SQLite data desynchronization.
+                    </span>
+                  </div>
+                )}
+                <div className={`grid grid-cols-1 sm:grid-cols-3 gap-2.5 ${isEditing ? 'pointer-events-none opacity-80' : ''}`}>
                   {/* Option 1: Solo System Orbit */}
                   <div
                     onClick={() => handleSelectSyncMode('solo')}
