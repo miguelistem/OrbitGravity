@@ -369,8 +369,9 @@ pub fn launch_instance(state: State<'_, AppState>, id: String) -> Result<Instanc
     // Perform pre-flight pull synchronization
     let _ = crate::conversations::sync_instance_on_session_start(&instance_clone);
 
+    let parent_bins = fleet.parent_binaries.clone();
     let instance = fleet.instances.iter_mut().find(|i| i.id == id).unwrap();
-    launch_antigravity_instance(instance)?;
+    launch_antigravity_instance(instance, parent_bins.as_ref())?;
     let updated = instance.clone();
 
     sync_account_stats(&mut fleet);

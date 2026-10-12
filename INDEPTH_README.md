@@ -27,7 +27,7 @@
    - [Rust State Structures (`fleet_state.json`)](#rust-state-structures-fleet_statejson)
    - [VS Code Storage & SQLite Schema (`state.vscdb` / `conversations.db`)](#vs-code-storage--sqlite-schema-statevscdb--conversationsdb)
 6. [Automated Verification & Test Harness](#6-automated-verification--test-harness)
-   - [Backend Rust Unit & Integration Tests (31/31 passing)](#backend-rust-unit--integration-tests-3131-passing)
+   - [Backend Rust Unit & Integration Tests (35/35 passing)](#backend-rust-unit--integration-tests-3535-passing)
 7. [Caveats, Edge Cases & Failure Recovery](#7-caveats-edge-cases--failure-recovery)
 
 ---
@@ -430,7 +430,7 @@ pub struct Instance {
 
 ## 6. Automated Verification & Test Harness
 
-### Backend Rust Unit & Integration Tests (31/31 passing)
+### Backend Rust Unit & Integration Tests (35/35 passing)
 
 The native backend is verified via [`src-tauri/tests/backend_tests.rs`](./src-tauri/tests/backend_tests.rs):
 
@@ -439,7 +439,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
 ```
-test result: ok. 31 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.76s
+test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.66s
 ```
 
 | Test Name | System Component Verified |

@@ -322,13 +322,26 @@ pub fn check_launch_concurrency_guard_with_tracked(
 }
 
 /// Spawns an Antigravity instance with complete environment isolation.
-pub fn launch_antigravity_instance(instance: &mut Instance) -> Result<(), String> {
+pub fn launch_antigravity_instance(
+    instance: &mut Instance,
+    parent_binaries: Option<&crate::models::ParentBinaries>,
+) -> Result<(), String> {
     let binary_path = match &instance.binary_path {
         Some(custom) if Path::new(custom).exists() => std::path::PathBuf::from(custom),
         _ => {
             let app_type = instance.app_type.as_deref().unwrap_or("antigravity_ide");
             detect_binary_for_app_type(app_type)
-                .ok_or_else(|| "Antigravity binary not found on the system. Please ensure Antigravity IDE or Antigravity is installed.".to_string())?
+                .or_else(|| {
+                    parent_binaries.and_then(|pb| {
+                        let path_str = if app_type == "antigravity" {
+                            pb.app_path.as_deref()
+                        } else {
+                            pb.ide_path.as_deref()
+                        };
+                        path_str.map(std::path::PathBuf::from).filter(|p| p.exists())
+                    })
+                })
+                .ok_or_else(|| "Antigravity binary not found on the system. Please ensure Antigravity IDE or Antigravity is installed, or configure custom executables in Cosmic Systems.".to_string())?
         }
     };
 

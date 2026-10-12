@@ -11,7 +11,7 @@
 [![Rust Backend](https://img.shields.io/badge/Rust-2024%20Edition-black?logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Tauri v2](https://img.shields.io/badge/Tauri-v2.12-24C8D8?logo=tauri&logoColor=white)](https://tauri.app/)
 [![React 19](https://img.shields.io/badge/Frontend-React%2019%20%2B%20Tailwind-61DAFB?logo=react&logoColor=black)](https://react.dev/)
-[![Tests](https://img.shields.io/badge/Tests-31%2F31%20Passed-34D399?logo=checkmarx&logoColor=white)](./INDEPTH_README.md)
+[![Tests](https://img.shields.io/badge/Tests-35%2F35%20Passed-34D399?logo=checkmarx&logoColor=white)](./INDEPTH_README.md)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 [**Quick Start**](#-quick-start) • [**Features**](#-key-features) • [**User Guide**](#-user-guide--how-to-use) • [**Caveats**](#-important-caveats--known-limitations) • [**Deep-Dive Docs**](./INDEPTH_README.md)
@@ -178,9 +178,9 @@ OrbitGravity includes an exhaustive Rust test suite covering process lifecycle, 
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-**All 31 test suites passing:**
+**All 35 test suites passing:**
 ```
-running 31 tests
+running 35 tests
 test test_antigravity_binary_detection ... ok
 test test_junction_support ... ok
 test test_junction_lifecycle ... ok
@@ -188,7 +188,7 @@ test test_shortcut_creation ... ok
 test test_transfer_copies_complete_assets_including_db_and_fts_search ... ok
 test test_atomic_sync_anti_rollback_protection_master_retains_25 ... ok
 ...
-test result: ok. 31 passed; 0 failed; 0 ignored; finished in 10.76s
+test result: ok. 35 passed; 0 failed; 0 ignored; finished in 10.66s
 ```
 
 ---
