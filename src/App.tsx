@@ -8,33 +8,29 @@ import { invoke } from '@tauri-apps/api/core';
 import { isTauri } from './api';
 import { AntigravityInstance, AntigravityAccount, LogEntry, InstanceStatus, AntigravityAppType } from './types/antigravity';
 import { INITIAL_ACCOUNTS, INITIAL_INSTANCES, INITIAL_LOGS } from './mock/initialData';
-import { formatCompactNumber } from './utils/formatters';
 import { OrbitGravityLogo } from './components/OrbitGravityLogo';
 import { AntigravityWorkspace } from './components/AntigravityWorkspace';
-import { DesktopShortcutsHub } from './components/DesktopShortcutsHub';
 import { AccountQuotaMonitor } from './components/AccountQuotaMonitor';
+import { CosmicSystemsManager } from './components/CosmicSystemsManager';
+import { NebulaArchive } from './components/NebulaArchive';
+import { InstanceUsageMonitorView } from './components/InstanceUsageMonitorView';
+import { EventHorizonIcon } from './components/EventHorizonIcon';
 import { InstanceModal } from './components/InstanceModal';
 import { AccountManagerModal } from './components/AccountManagerModal';
 import { 
   Plus, 
-  Settings, 
   History, 
-  Monitor, 
-  ShieldCheck, 
   Terminal, 
-  Cpu, 
   Code, 
   Database, 
-  Server, 
   Zap, 
-  Layers,
-  Folder,
-  FolderPlus,
-  ChevronRight,
-  ChevronDown,
-  ListFilter,
+  Folder, 
+  FolderPlus, 
+  ChevronRight, 
+  ChevronDown, 
+  ListFilter, 
   PanelLeft,
-  Trash2
+  AlertTriangle 
 } from 'lucide-react';
 
 export default function App() {
@@ -76,8 +72,8 @@ export default function App() {
     instances[0]?.id || 'inst-portfolio-spec'
   );
 
-  // Active main view tab: 'workspace' | 'shortcuts' | 'accounts'
-  const [activeViewTab, setActiveViewTab] = useState<'workspace' | 'shortcuts' | 'accounts'>('workspace');
+  // Active main view tab: 'workspace' | 'cosmic' | 'accounts' | 'nebula' | 'usage'
+  const [activeViewTab, setActiveViewTab] = useState<'workspace' | 'cosmic' | 'accounts' | 'nebula' | 'usage'>('workspace');
 
   // Sidebar filter
   const [sidebarFilter, setSidebarFilter] = useState<'all' | 'running'>('all');
@@ -93,6 +89,7 @@ export default function App() {
   const [editingInstance, setEditingInstance] = useState<AntigravityInstance | null>(null);
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<AntigravityAccount | null>(null);
+  const [errorAlert, setErrorAlert] = useState<{ title: string; message: string } | null>(null);
 
   // Persist state
   useEffect(() => {
@@ -117,6 +114,8 @@ export default function App() {
   useEffect(() => {
     const interval = setInterval(() => {
       setInstances((prevInstances) => {
+        const hasRunning = prevInstances.some((inst) => inst.status === 'running');
+        if (!hasRunning) return prevInstances;
         return prevInstances.map((inst) => {
           if (inst.status !== 'running') return inst;
           return {
@@ -157,11 +156,14 @@ export default function App() {
                     id: ri.id,
                     name: ri.name,
                     status: isRunning ? 'running' : 'stopped',
+                    pid: ri.pid ?? (isRunning ? existing.pid : undefined),
                     workspacePath: ri.workspace_path || existing.workspacePath,
                     profileDir: ri.profile_dir || existing.profileDir,
                     customFlags: ri.custom_flags || existing.customFlags,
                     envVars: ri.env_vars || existing.envVars,
                     appType: ri.app_type || existing.appType || 'antigravity_ide',
+                    blackholeSync: ri.blackhole_sync ?? ri.blackholeSync ?? existing.blackholeSync ?? false,
+                    syncMode: ri.sync_mode ?? ri.syncMode ?? existing.syncMode ?? (ri.blackhole_sync ? 'black_hole' : 'solar_system'),
                   };
                 }
                 return {
@@ -172,6 +174,7 @@ export default function App() {
                   color: 'neutral',
                   icon: 'terminal',
                   status: isRunning ? 'running' : 'stopped',
+                  pid: ri.pid,
                   accountId: ri.account_id || accounts[0]?.id || 'acc-enterprise',
                   appType: ri.app_type || 'antigravity_ide',
                   workspacePath: ri.workspace_path || '',
@@ -183,6 +186,8 @@ export default function App() {
                   totalElapsedSeconds: 0,
                   lastActivityAt: Date.now(),
                   createdAt: new Date().toISOString(),
+                  blackholeSync: ri.blackhole_sync ?? ri.blackholeSync ?? false,
+                  syncMode: ri.sync_mode ?? ri.syncMode ?? (ri.blackhole_sync ? 'black_hole' : 'solar_system'),
                 };
               });
             });
@@ -195,6 +200,12 @@ export default function App() {
   const activeInstance = instances.find((i) => i.id === activeInstanceId) || instances[0];
   const activeAccount = accounts.find((a) => a.id === activeInstance?.accountId) || accounts[0];
 
+  useEffect(() => {
+    if (isTauri() && activeInstance?.id) {
+      invoke('set_active_auth_instance', { id: activeInstance.id }).catch(() => {});
+    }
+  }, [activeInstance?.id]);
+
   const handleToggleStatus = async (id: string, newStatus: InstanceStatus) => {
     setInstances((prev) =>
       prev.map((inst) => (inst.id === id ? { ...inst, status: newStatus } : inst))
@@ -203,6 +214,7 @@ export default function App() {
     if (isTauri()) {
       try {
         if (newStatus === 'running') {
+          invoke('set_active_auth_instance', { id }).catch(() => {});
           handleAddLog({
             instanceId: id,
             level: 'exec',
@@ -210,6 +222,9 @@ export default function App() {
             message: 'Launching isolated Antigravity process with SSH_CONNECTION socket bypass...',
           });
           const res = await invoke<any>('launch_instance', { id });
+          setInstances((prev) =>
+            prev.map((inst) => (inst.id === id ? { ...inst, pid: res?.pid ?? undefined, status: 'running' } : inst))
+          );
           handleAddLog({
             instanceId: id,
             level: 'info',
@@ -224,6 +239,9 @@ export default function App() {
             message: 'Stopping Antigravity instance...',
           });
           await invoke('stop_instance', { id });
+          setInstances((prev) =>
+            prev.map((inst) => (inst.id === id ? { ...inst, pid: undefined, status: 'stopped' } : inst))
+          );
           handleAddLog({
             instanceId: id,
             level: 'info',
@@ -232,12 +250,22 @@ export default function App() {
           });
         }
       } catch (err: any) {
+        const errorMsg = err?.message || String(err);
         console.error('Failed to toggle native instance:', err);
+        setInstances((prev) =>
+          prev.map((inst) => (inst.id === id ? { ...inst, status: newStatus === 'running' ? 'stopped' : 'running', pid: undefined } : inst))
+        );
         handleAddLog({
           instanceId: id,
           level: 'error',
           source: 'system',
-          message: `Process error: ${err?.message || String(err)}`,
+          message: `Process error: ${errorMsg}`,
+        });
+        setErrorAlert({
+          title: errorMsg.toLowerCase().includes('parent') || errorMsg.toLowerCase().includes('solar system') || errorMsg.toLowerCase().includes('black hole')
+            ? 'Launch Blocked by Concurrency Guard'
+            : 'Process Launch Error',
+          message: errorMsg,
         });
       }
     }
@@ -258,7 +286,18 @@ export default function App() {
     setLogs((prev) => [...prev, entry]);
   };
 
-  const handleSaveInstance = async (data: Partial<AntigravityInstance>) => {
+  const handleClearLogs = (instanceId?: string) => {
+    if (instanceId) {
+      setLogs((prev) => prev.filter((l) => l.instanceId !== instanceId));
+    } else {
+      setLogs([]);
+    }
+  };
+
+  const handleSaveInstance = async (
+    data: Partial<AntigravityInstance>,
+    initialImport?: { source: 'global' | string; appType: AntigravityAppType }
+  ) => {
     if (editingInstance) {
       if (isTauri()) {
         try {
@@ -271,6 +310,10 @@ export default function App() {
             customFlags: data.customFlags,
             envVars: data.envVars,
             appType: data.appType,
+            blackholeSync: data.syncMode === 'black_hole',
+            blackhole_sync: data.syncMode === 'black_hole',
+            syncMode: data.syncMode,
+            sync_mode: data.syncMode,
           });
           handleAddLog({
             instanceId: editingInstance.id,
@@ -304,6 +347,8 @@ export default function App() {
               envVars: data.envVars,
               appType: data.appType || 'antigravity_ide',
               createShortcut: data.createShortcut ?? true,
+              blackholeSync: data.syncMode === 'black_hole',
+              syncMode: data.syncMode || 'solar_system',
             },
             name: data.name || 'New Service Instance',
             accountId: data.accountId || accounts[0]?.id,
@@ -313,6 +358,10 @@ export default function App() {
             envVars: data.envVars,
             appType: data.appType || 'antigravity_ide',
             createShortcut: data.createShortcut ?? true,
+            blackholeSync: data.syncMode === 'black_hole',
+            blackhole_sync: data.syncMode === 'black_hole',
+            syncMode: data.syncMode || 'solar_system',
+            sync_mode: data.syncMode || 'solar_system',
           });
           if (rustInst?.id) {
             newId = rustInst.id;
@@ -329,6 +378,43 @@ export default function App() {
             source: 'system',
             message: `Created profile directory with NTFS Junctions: ${profileDir}`,
           });
+
+          // If user requested initial conversation history import:
+          if (initialImport) {
+            try {
+              const isGlobal = initialImport.source === 'global';
+              let sourceProfileDir: string | null = null;
+              let sourceAppType = initialImport.appType;
+              if (!isGlobal) {
+                const srcInst = instances.find((i) => i.id === initialImport.source);
+                if (srcInst) {
+                  sourceProfileDir = srcInst.profileDir || null;
+                  sourceAppType = srcInst.appType || 'antigravity_ide';
+                }
+              }
+              const importedCount = await invoke<number>('import_conversations', {
+                targetInstanceId: newId,
+                sourceProfileDir,
+                sourceAppType,
+                isGlobal,
+                conversationIds: [],
+              });
+              handleAddLog({
+                instanceId: newId,
+                level: 'info',
+                source: 'system',
+                message: `Imported ${importedCount} conversation(s) into memory from ${isGlobal ? 'Main Antigravity' : 'selected profile'}.`,
+              });
+            } catch (importErr: any) {
+              console.error('Failed initial conversation import:', importErr);
+              handleAddLog({
+                instanceId: newId,
+                level: 'warn',
+                source: 'system',
+                message: `Could not import initial conversations: ${importErr?.message || String(importErr)}`,
+              });
+            }
+          }
         } catch (err: any) {
           console.error('Failed to create native instance profile:', err);
         }
@@ -353,6 +439,8 @@ export default function App() {
         totalElapsedSeconds: 0,
         lastActivityAt: Date.now(),
         createdAt: new Date().toISOString(),
+        blackholeSync: data.syncMode === 'black_hole',
+        syncMode: data.syncMode || 'solar_system',
       };
       setInstances((prev) => [newInst, ...prev]);
       setActiveInstanceId(newId);
@@ -482,14 +570,10 @@ export default function App() {
         onMouseDown={handleStartDrag}
         className="h-10 bg-[#16171B] border-b border-[#23242A] flex items-center justify-between pl-3.5 pr-0 shrink-0 text-xs text-[#9DA1B0] select-none cursor-default"
       >
-        {/* Left Window Menu with OrbitGravity Logo Glyph & Menu Items */}
-        <div className="flex items-center gap-3.5 pointer-events-auto">
-          <div className="flex items-center gap-2">
-            <OrbitGravityLogo size={17} showSquircle={false} />
-            <span className="font-semibold text-[13.5px] text-[#EDEDED] tracking-tight">OrbitGravity</span>
-          </div>
+        {/* Left Window Menu with OrbitGravity Brand & Menu Items */}
+        <div className="flex items-center gap-4 pointer-events-auto pl-1">
+          <span className="font-bold text-[16px] text-white tracking-tight">OrbitGravity</span>
           <div className="flex items-center gap-3 text-[13px] text-[#A6ABB8]">
-            <span className="hover:text-white cursor-pointer px-1.5 py-0.5 rounded hover:bg-zinc-800/50 transition">File</span>
             <span className="hover:text-white cursor-pointer px-1.5 py-0.5 rounded hover:bg-zinc-800/50 transition">View</span>
             <span className="hover:text-white cursor-pointer px-1.5 py-0.5 rounded hover:bg-zinc-800/50 transition">Window</span>
             <span className="hover:text-white cursor-pointer px-1.5 py-0.5 rounded hover:bg-zinc-800/50 transition">Help</span>
@@ -534,30 +618,40 @@ export default function App() {
       {/* 2. Main Body Container with Left Sidebar & Center Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* LEFT SIDEBAR - Desktop Shortcuts & Instances Hub */}
-        <aside className={`${sidebarCollapsed ? 'w-16' : 'w-[320px] min-w-[320px]'} bg-[#141518] border-r border-[#22242B] flex flex-col justify-between shrink-0 select-none transition-all duration-200`}>
-          <div className="flex-1 overflow-y-auto p-3.5 space-y-4">
-            {/* Top Bar with OrbitGravity Squircle Logo & Controls (NO duplicate app name) */}
-            <div className="flex items-center justify-between pb-0.5 px-0.5">
-              <div className="flex items-center gap-2.5">
-                <OrbitGravityLogo size={22} showSquircle={true} />
-                {!sidebarCollapsed && (
-                  <button
-                    onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                    className="p-1.5 text-zinc-400 hover:text-white hover:bg-[#202229] rounded-md cursor-pointer transition"
-                    title="Toggle Sidebar"
-                  >
-                    <PanelLeft className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-
-              {!sidebarCollapsed && (
-                <div className="flex items-center gap-1 text-zinc-400">
-                  <button className="p-1.5 hover:text-white hover:bg-[#202229] rounded-md text-xs cursor-pointer transition">&lt;</button>
-                  <button className="p-1.5 hover:text-white hover:bg-[#202229] rounded-md text-xs cursor-pointer transition">&gt;</button>
+        <aside className={`${sidebarCollapsed ? 'w-[68px] min-w-[68px]' : 'w-[320px] min-w-[320px]'} bg-[#141518] border-r border-[#22242B] flex flex-col justify-between shrink-0 select-none transition-all duration-200`}>
+          <div className={`flex-1 overflow-y-auto ${sidebarCollapsed ? 'p-2 space-y-3 flex flex-col items-center' : 'p-3.5 space-y-4'}`}>
+            {/* Top Bar with OrbitGravity Squircle Logo & Controls */}
+            {!sidebarCollapsed ? (
+              <div className="flex items-center justify-between pb-0.5 px-0.5">
+                <div className="flex items-center gap-2.5">
+                  <OrbitGravityLogo size={30} showSquircle={true} />
                 </div>
-              )}
-            </div>
+                <button
+                  onClick={() => setSidebarCollapsed(true)}
+                  className="p-1.5 text-zinc-400 hover:text-white hover:bg-[#202229] rounded-md cursor-pointer transition"
+                  title="Collapse Sidebar"
+                >
+                  <PanelLeft className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-2 pb-0.5 w-full">
+                <div
+                  onClick={() => setSidebarCollapsed(false)}
+                  className="cursor-pointer hover:opacity-85 transition"
+                  title="Expand Sidebar"
+                >
+                  <OrbitGravityLogo size={30} showSquircle={true} />
+                </div>
+                <button
+                  onClick={() => setSidebarCollapsed(false)}
+                  className="w-10 h-10 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-[#202229] rounded-lg cursor-pointer transition"
+                  title="Expand Sidebar"
+                >
+                  <PanelLeft className="w-4 h-4" />
+                </button>
+              </div>
+            )}
 
             {/* + New Instance Shortcut Profile button */}
             {!sidebarCollapsed ? (
@@ -577,7 +671,7 @@ export default function App() {
                   setEditingInstance(null);
                   setIsInstanceModalOpen(true);
                 }}
-                className="w-full h-10 flex items-center justify-center bg-[#1F2128] hover:bg-[#282B34] text-[#EDEDED] rounded-lg border border-[#2D303B] transition cursor-pointer"
+                className="w-10 h-10 flex items-center justify-center bg-[#1F2128] hover:bg-[#282B34] text-[#EDEDED] rounded-lg border border-[#2D303B] transition cursor-pointer shadow-sm"
                 title="New Instance Shortcut"
               >
                 <Plus className="w-4 h-4 text-[#C4C7D2]" />
@@ -585,59 +679,120 @@ export default function App() {
             )}
 
             {/* Global Navigation Links */}
-            <div className="space-y-1 text-[13.5px] text-[#C4C7D0]">
-              <button
-                onClick={() => setActiveViewTab('workspace')}
-                className={`w-full text-left h-9 px-3 rounded-lg flex items-center gap-2.5 transition cursor-pointer ${
-                  activeViewTab === 'workspace'
-                    ? 'bg-[#262832] text-white font-medium'
-                    : 'hover:bg-[#1E2028] hover:text-white'
-                }`}
-                title="Session Workspace"
-              >
-                <History className="w-[18px] h-[18px] text-[#9A9EA8] shrink-0" />
-                {!sidebarCollapsed && <span>Session Workspace</span>}
-              </button>
+            {!sidebarCollapsed ? (
+              <div className="space-y-1 text-[13.5px] text-[#C4C7D0]">
+                <button
+                  onClick={() => setActiveViewTab('cosmic')}
+                  className={`w-full text-left h-9 px-3 rounded-lg flex items-center gap-2.5 transition cursor-pointer ${
+                    activeViewTab === 'cosmic'
+                      ? 'bg-[#262832] text-white font-medium'
+                      : 'hover:bg-[#1E2028] hover:text-white'
+                  }`}
+                  title="Cosmic Systems Manager"
+                >
+                  <Zap className="w-[18px] h-[18px] text-purple-400 shrink-0" />
+                  <span>Cosmic Systems Manager</span>
+                </button>
 
-              <button
-                onClick={() => setActiveViewTab('shortcuts')}
-                className={`w-full text-left h-9 px-3 rounded-lg flex items-center justify-between transition cursor-pointer ${
-                  activeViewTab === 'shortcuts'
-                    ? 'bg-[#262832] text-white font-medium'
-                    : 'hover:bg-[#1E2028] hover:text-white'
-                }`}
-                title="Desktop Shortcuts Hub"
-              >
-                <div className="flex items-center gap-2.5">
-                  <Monitor className="w-[18px] h-[18px] text-[#9A9EA8] shrink-0" />
-                  {!sidebarCollapsed && <span>Desktop Shortcuts Hub</span>}
-                </div>
-                {!sidebarCollapsed && (
-                  <span className="text-xs font-mono text-[#8B8F9A] px-1.5 py-0.2 rounded bg-[#1C1E25]">{instances.length}</span>
-                )}
-              </button>
+                <button
+                  onClick={() => setActiveViewTab('nebula')}
+                  className={`w-full text-left h-9 px-3 rounded-lg flex items-center justify-between transition cursor-pointer ${
+                    activeViewTab === 'nebula'
+                      ? 'bg-[#262832] text-white font-medium'
+                      : 'hover:bg-[#1E2028] hover:text-white text-[#C4C7D0]'
+                  }`}
+                  title="Nebula Archive - Stellar Memory Nursery (Coming Soon)"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Database className="w-[18px] h-[18px] text-purple-400 shrink-0" />
+                    <span className="truncate">Nebula Archive</span>
+                  </div>
+                  <span className="inline-flex items-center justify-center leading-none h-[18px] px-1.5 rounded text-[8.5px] font-mono font-bold bg-purple-950/70 text-purple-300 border border-purple-700/50 uppercase tracking-wide shrink-0">
+                    SOON
+                  </span>
+                </button>
 
-              <button
-                onClick={() => setActiveViewTab('accounts')}
-                className={`w-full text-left h-9 px-3 rounded-lg flex items-center justify-between transition cursor-pointer ${
-                  activeViewTab === 'accounts'
-                    ? 'bg-[#262832] text-white font-medium'
-                    : 'hover:bg-[#1E2028] hover:text-white'
-                }`}
-                title="Account Profiles"
-              >
-                <div className="flex items-center gap-2.5">
-                  <ShieldCheck className="w-[18px] h-[18px] text-[#9A9EA8] shrink-0" />
-                  {!sidebarCollapsed && <span>Account Profiles</span>}
-                </div>
-                {!sidebarCollapsed && (
-                  <span className="text-xs font-mono text-[#8B8F9A] px-1.5 py-0.2 rounded bg-[#1C1E25]">{accounts.length}</span>
-                )}
-              </button>
-            </div>
+                <button
+                  onClick={() => setActiveViewTab('usage')}
+                  className={`w-full text-left h-9 px-3 rounded-lg flex items-center gap-2.5 transition cursor-pointer ${
+                    activeViewTab === 'usage'
+                      ? 'bg-[#262832] text-white font-medium'
+                      : 'hover:bg-[#1E2028] hover:text-white'
+                  }`}
+                  title="Event Horizon — Quota & Usage Monitor"
+                >
+                  <EventHorizonIcon className="w-[18px] h-[18px] shrink-0" />
+                  <span>Event Horizon</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveViewTab('workspace')}
+                  className={`w-full text-left h-9 px-3 rounded-lg flex items-center gap-2.5 transition cursor-pointer ${
+                    activeViewTab === 'workspace'
+                      ? 'bg-[#262832] text-white font-medium'
+                      : 'hover:bg-[#1E2028] hover:text-white'
+                  }`}
+                  title="Session Workspace"
+                >
+                  <History className="w-[18px] h-[18px] text-[#9A9EA8] shrink-0" />
+                  <span>Session Workspace</span>
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-1 w-full flex flex-col items-center text-[13.5px] text-[#C4C7D0]">
+                <button
+                  onClick={() => setActiveViewTab('cosmic')}
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center transition cursor-pointer ${
+                    activeViewTab === 'cosmic'
+                      ? 'bg-[#262832] text-white shadow-sm'
+                      : 'hover:bg-[#1E2028] hover:text-white'
+                  }`}
+                  title="Cosmic Systems Manager"
+                >
+                  <Zap className="w-[18px] h-[18px] text-purple-400" />
+                </button>
+
+                <button
+                  onClick={() => setActiveViewTab('nebula')}
+                  className={`relative w-10 h-10 rounded-lg flex items-center justify-center transition cursor-pointer ${
+                    activeViewTab === 'nebula'
+                      ? 'bg-[#262832] text-white shadow-sm'
+                      : 'hover:bg-[#1E2028] hover:text-white'
+                  }`}
+                  title="Nebula Archive (Coming Soon)"
+                >
+                  <Database className="w-[18px] h-[18px] text-purple-400" />
+                  <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-purple-400 ring-2 ring-[#141518]" />
+                </button>
+
+                <button
+                  onClick={() => setActiveViewTab('usage')}
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center transition cursor-pointer ${
+                    activeViewTab === 'usage'
+                      ? 'bg-[#262832] text-white shadow-sm'
+                      : 'hover:bg-[#1E2028] hover:text-white'
+                  }`}
+                  title="Event Horizon — Quota & Usage Monitor"
+                >
+                  <EventHorizonIcon className="w-[18px] h-[18px]" />
+                </button>
+
+                <button
+                  onClick={() => setActiveViewTab('workspace')}
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center transition cursor-pointer ${
+                    activeViewTab === 'workspace'
+                      ? 'bg-[#262832] text-white shadow-sm'
+                      : 'hover:bg-[#1E2028] hover:text-white'
+                  }`}
+                  title="Session Workspace"
+                >
+                  <History className="w-[18px] h-[18px] text-[#9A9EA8]" />
+                </button>
+              </div>
+            )}
 
             {/* PROJECTS / INSTANCES SECTION - Clean Antigravity Style */}
-            {!sidebarCollapsed && (
+            {!sidebarCollapsed ? (
               <div className="pt-2 border-t border-[#202229]">
                 <div className="flex items-center justify-between text-[12px] text-[#8B8F9A] px-2 py-1.5">
                   <span className="font-semibold tracking-wider uppercase text-[#8B8F9A]">
@@ -668,11 +823,43 @@ export default function App() {
 
                 {/* Clean Hierarchical Vertical Nav (NO BOXES, NO HARD BORDERS) */}
                 <div className="space-y-1 mt-1">
+                  {/* Pinned Galactic Root: The Black Hole (Parent Singularity) */}
+                  <div
+                    onClick={() => setActiveViewTab('cosmic')}
+                    className={`mb-2 p-2 rounded-lg border transition-all cursor-pointer group select-none ${
+                      activeViewTab === 'cosmic'
+                        ? 'bg-purple-950/40 border-purple-500/50 shadow-[0_0_12px_rgba(168,85,247,0.15)]'
+                        : 'bg-[#15161D] border-purple-900/30 hover:border-purple-600/50 hover:bg-[#191B24]'
+                    }`}
+                    title="The Black Hole (Parent Singularity) - Global Root Memory"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-5 h-5 rounded-md bg-purple-950/80 border border-purple-600/50 flex items-center justify-center text-[11px] shrink-0 shadow-[0_0_8px_rgba(168,85,247,0.3)]">
+                          🕳️
+                        </div>
+                        <div className="min-w-0 flex flex-col justify-center">
+                          <div className="text-[12px] font-bold text-purple-200 group-hover:text-white truncate flex items-center gap-3">
+                            <span>The Black Hole</span>
+                            <span className="inline-flex items-center justify-center leading-none h-[18px] px-1.5 rounded text-[9.5px] font-mono font-bold bg-purple-900/60 text-purple-300 border border-purple-700/50 uppercase">
+                              PARENT
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-zinc-400 font-mono truncate mt-1">
+                            Singularity Root Memory
+                          </div>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-3.5 h-3.5 text-purple-400 group-hover:translate-x-0.5 transition-transform shrink-0" />
+                    </div>
+                  </div>
+
                   {Object.entries(groupedInstances).map(([groupName, items]) => {
                     const isCollapsed = !!collapsedFolders[groupName];
+                    const isSolarSystem = items.length >= 2;
                     return (
                       <div key={groupName} className="space-y-0.5">
-                        {/* Folder Category Row */}
+                        {/* Folder / Solar System Category Row */}
                         <div
                           onClick={() => toggleFolder(groupName)}
                           className="flex items-center gap-2 px-2 py-1.5 rounded-md text-[13px] font-medium text-[#9A9EA8] hover:text-[#EDEDED] hover:bg-[#181A22] cursor-pointer select-none transition-colors"
@@ -682,9 +869,17 @@ export default function App() {
                           ) : (
                             <ChevronDown className="w-3.5 h-3.5 text-[#707482] shrink-0" />
                           )}
-                          <Folder className="w-4 h-4 text-[#8B8F9A] shrink-0" />
-                          <span className="truncate text-[13px] font-medium text-[#A6ABB8]">{groupName}</span>
-                          <span className="text-[11px] text-[#636775] font-mono ml-auto">{items.length}</span>
+                          {isSolarSystem ? (
+                            <span className="text-amber-400 text-xs shrink-0" title="Solar System: Star Shared Brain">☀️</span>
+                          ) : (
+                            <Folder className="w-4 h-4 text-[#8B8F9A] shrink-0" />
+                          )}
+                          <span className="truncate text-[13px] font-medium text-[#A6ABB8]">
+                            {isSolarSystem ? `Solar System: ${groupName}` : groupName}
+                          </span>
+                          <span className="text-[11px] text-[#636775] font-mono ml-auto">
+                            {isSolarSystem ? `${items.length} 🪐` : items.length}
+                          </span>
                         </div>
 
                         {/* Child Instance items */}
@@ -719,14 +914,45 @@ export default function App() {
                                   </div>
 
                                   <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                                    {inst.blackholeSync && (
+                                      <span
+                                        className="inline-flex items-center justify-center leading-none h-[18px] px-1.5 rounded text-[10px] bg-purple-950/70 text-purple-300 border border-purple-700/50"
+                                        title="Synchronized with The Black Hole"
+                                      >
+                                        🕳️
+                                      </span>
+                                    )}
+                                    <span className={`inline-flex items-center justify-center leading-none h-[18px] px-1.5 rounded text-[9.5px] font-mono font-semibold ${
                                       inst.appType === 'antigravity'
                                         ? 'bg-purple-950/40 text-purple-400 border border-purple-800/40'
                                         : 'bg-blue-950/40 text-blue-400 border border-blue-800/40'
                                     }`}>
                                       {inst.appType === 'antigravity' ? 'App' : 'IDE'}
                                     </span>
-                                    <span className="text-[12px] font-mono text-[#787D8A] group-hover:text-[#A6ABB8]">
+                                    {inst.tier === 'Pro' ? (
+                                      <span
+                                        className="inline-flex items-center justify-center leading-none h-[18px] px-1.5 rounded text-[9px] font-mono font-extrabold bg-gradient-to-r from-zinc-200 via-white to-zinc-300 text-zinc-950 border border-white/90 shadow-[0_0_8px_rgba(255,255,255,0.4)]"
+                                        title="Pro Tier Instance (Platinum)"
+                                      >
+                                        PRO
+                                      </span>
+                                    ) : inst.tier === 'Plus' ? (
+                                      <span
+                                        className="inline-flex items-center justify-center leading-none h-[18px] px-1.5 rounded text-[9px] font-mono font-bold bg-blue-950/70 text-blue-300 border border-blue-500/60 shadow-[0_0_6px_rgba(59,130,246,0.3)] gap-1"
+                                        title="Plus Tier Instance"
+                                      >
+                                        <Zap className="w-2.5 h-2.5 text-cyan-400 shrink-0" />
+                                        <span>PLUS</span>
+                                      </span>
+                                    ) : (
+                                      <span
+                                        className="inline-flex items-center justify-center leading-none h-[18px] px-1.5 rounded text-[9px] font-mono font-medium bg-zinc-800/80 text-zinc-400 border border-zinc-700/60"
+                                        title="Free Tier Instance"
+                                      >
+                                        FREE
+                                      </span>
+                                    )}
+                                    <span className="inline-flex items-center justify-center leading-none h-[18px] text-[11px] font-mono text-[#787D8A] group-hover:text-[#A6ABB8]">
                                       {formatInstanceDurationBadge(inst)}
                                     </span>
                                   </div>
@@ -740,12 +966,57 @@ export default function App() {
                   })}
                 </div>
               </div>
+            ) : (
+              <div className="pt-2 border-t border-[#202229] flex flex-col items-center gap-1.5 w-full">
+                {/* Pinned Black Hole in collapsed mode */}
+                <button
+                  onClick={() => setActiveViewTab('cosmic')}
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center transition cursor-pointer border ${
+                    activeViewTab === 'cosmic'
+                      ? 'bg-purple-950/60 border-purple-500/50 shadow-[0_0_12px_rgba(168,85,247,0.2)]'
+                      : 'bg-[#15161D] border-purple-900/30 hover:border-purple-600/50 hover:bg-[#191B24]'
+                  }`}
+                  title="The Black Hole (Parent Singularity) - Global Root Memory"
+                >
+                  <span className="text-sm">🕳️</span>
+                </button>
+
+                {/* Instance icons in collapsed mode */}
+                {instances.map((inst) => {
+                  const isSelected = inst.id === activeInstanceId && activeViewTab === 'workspace';
+                  const isRunning = inst.status === 'running';
+                  return (
+                    <button
+                      key={inst.id}
+                      onClick={() => {
+                        setActiveInstanceId(inst.id);
+                        setActiveViewTab('workspace');
+                      }}
+                      className={`relative w-10 h-10 rounded-lg flex items-center justify-center transition cursor-pointer ${
+                        isSelected
+                          ? 'bg-[#282A34] text-white font-medium shadow-sm'
+                          : 'text-[#C4C7D0] hover:bg-[#1B1D25] hover:text-white'
+                      }`}
+                      title={`${inst.name} (${isRunning ? 'Running' : 'Stopped'}) - ${inst.appType === 'antigravity' ? 'Antigravity' : 'Antigravity IDE'}`}
+                    >
+                      {inst.appType === 'antigravity' ? (
+                        <Terminal className="w-4 h-4 text-emerald-400" />
+                      ) : (
+                        <Code className="w-4 h-4 text-blue-400" />
+                      )}
+                      {isRunning && (
+                        <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-[#141518] shadow-[0_0_6px_rgba(52,211,153,0.9)]" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             )}
           </div>
 
-          {/* Bottom Sidebar: Fleet Active Sessions & User Profile */}
-          <div className="p-3.5 border-t border-[#1C1E26] bg-[#0E0F12] space-y-3">
-            {!sidebarCollapsed && (
+          {/* Bottom Sidebar: Fleet Active Sessions */}
+          <div className={`${sidebarCollapsed ? 'p-2 flex flex-col items-center justify-center' : 'p-3.5'} border-t border-[#1C1E26] bg-[#0E0F12]`}>
+            {!sidebarCollapsed ? (
               <div>
                 <div className="flex justify-between text-xs font-mono text-zinc-400 mb-1.5">
                   <span>Active Instances</span>
@@ -758,39 +1029,14 @@ export default function App() {
                   />
                 </div>
               </div>
-            )}
-
-            {/* User Account Strip */}
-            <div className="flex items-center justify-between pt-1 text-sm">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-6 h-6 rounded-full bg-[#1C1E26] border border-[#2B2D38] flex items-center justify-center text-xs text-zinc-300 font-semibold shrink-0">
-                  U
-                </div>
-                {!sidebarCollapsed && (
-                  <div className="min-w-0">
-                    <div className="text-zinc-200 text-xs font-medium truncate">
-                      {activeAccount.email}
-                    </div>
-                    <div className="text-[11px] text-zinc-500 font-mono">
-                      {activeAccount.tier}
-                    </div>
-                  </div>
-                )}
+            ) : (
+              <div
+                className="w-8 h-8 rounded-lg flex flex-col items-center justify-center bg-[#16171B] border border-[#23242A] text-zinc-400"
+                title={`Active Instances: ${runningCount} / ${activeAccount.maxConcurrentSessions}`}
+              >
+                <span className="text-[11px] font-mono font-bold text-zinc-200">{runningCount}</span>
               </div>
-
-              {!sidebarCollapsed && (
-                <button
-                  onClick={() => {
-                    setEditingAccount(activeAccount);
-                    setIsAccountModalOpen(true);
-                  }}
-                  className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-[#1C1E26] rounded-md transition cursor-pointer"
-                  title="Account Settings"
-                >
-                  <Settings className="w-4 h-4" />
-                </button>
-              )}
-            </div>
+            )}
           </div>
         </aside>
 
@@ -799,6 +1045,7 @@ export default function App() {
           {activeViewTab === 'workspace' && activeInstance && (
             <AntigravityWorkspace
               instance={activeInstance}
+              instances={instances}
               account={activeAccount}
               logs={logs}
               onToggleStatus={handleToggleStatus}
@@ -809,43 +1056,53 @@ export default function App() {
               onAddLog={handleAddLog}
               onLaunchIde={handleLaunchIde}
               onDeleteInstance={handleDeleteInstance}
+              onClearLogs={handleClearLogs}
             />
           )}
 
-          {activeViewTab === 'shortcuts' && (
-            <DesktopShortcutsHub
+          {activeViewTab === 'cosmic' && (
+            <CosmicSystemsManager
               instances={instances}
-              accounts={accounts}
               onSelectInstance={(inst) => {
                 setActiveInstanceId(inst.id);
                 setActiveViewTab('workspace');
               }}
-              onOpenSettings={(inst) => {
-                setEditingInstance(inst);
-                setIsInstanceModalOpen(true);
+              onAddLog={handleAddLog}
+            />
+          )}
+
+          {activeViewTab === 'nebula' && (
+            <NebulaArchive instances={instances} />
+          )}
+
+          {activeViewTab === 'usage' && (
+            <InstanceUsageMonitorView
+              instances={instances}
+              onSelectInstance={(instId) => {
+                setActiveInstanceId(instId);
+                setActiveViewTab('workspace');
               }}
-              onCreateNewInstance={() => {
-                setEditingInstance(null);
-                setIsInstanceModalOpen(true);
-              }}
+              onLaunchInstance={(instId) => handleToggleStatus(instId, 'running')}
             />
           )}
 
           {activeViewTab === 'accounts' && (
             <div className="flex-1 overflow-y-auto p-6 md:p-8 bg-[#0F1012]">
-              <AccountQuotaMonitor
-                accounts={accounts}
-                instances={instances}
-                onUpdateAccount={handleSaveAccount}
-                onOpenAddAccountModal={() => {
-                  setEditingAccount(null);
-                  setIsAccountModalOpen(true);
-                }}
-                onOpenEditAccountModal={(acc) => {
-                  setEditingAccount(acc);
-                  setIsAccountModalOpen(true);
-                }}
-              />
+              <div className="max-w-6xl mx-auto">
+                <AccountQuotaMonitor
+                  accounts={accounts}
+                  instances={instances}
+                  onUpdateAccount={handleSaveAccount}
+                  onOpenAddAccountModal={() => {
+                    setEditingAccount(null);
+                    setIsAccountModalOpen(true);
+                  }}
+                  onOpenEditAccountModal={(acc) => {
+                    setEditingAccount(acc);
+                    setIsAccountModalOpen(true);
+                  }}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -875,6 +1132,31 @@ export default function App() {
         onSave={handleSaveAccount}
         initialAccount={editingAccount}
       />
+
+      {/* Concurrency Guard & Process Error Alert Modal */}
+      {errorAlert && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 select-none">
+          <div className="bg-[#14151B] border border-amber-500/50 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in duration-150">
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-amber-950/80 border border-amber-600/60 flex items-center justify-center text-amber-400 shrink-0 shadow-[0_0_12px_rgba(245,158,11,0.3)]">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="space-y-1 flex-1 min-w-0">
+                <h3 className="text-sm font-bold text-zinc-100">{errorAlert.title}</h3>
+                <p className="text-xs text-zinc-300 leading-relaxed font-sans">{errorAlert.message}</p>
+              </div>
+            </div>
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setErrorAlert(null)}
+                className="px-4 py-1.5 bg-[#22242F] hover:bg-[#2D303F] text-zinc-200 border border-[#3A3D4E] rounded-lg text-xs font-medium cursor-pointer transition shadow-sm"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

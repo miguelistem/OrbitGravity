@@ -5,10 +5,14 @@ pub mod telemetry;
 pub mod process;
 pub mod shortcut;
 pub mod storage;
+pub mod dispatcher;
+pub mod conversations;
 pub mod commands;
+pub mod quota;
 
 use commands::AppState;
 use storage::load_fleet_state;
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -24,6 +28,11 @@ pub fn run() {
                         .level(log::LevelFilter::Info)
                         .build(),
                 )?;
+            }
+            if let Some(window) = app.get_webview_window("main") {
+                if let Some(icon) = app.default_window_icon() {
+                    let _ = window.set_icon(icon.clone());
+                }
             }
             Ok(())
         })
@@ -48,6 +57,30 @@ pub fn run() {
             commands::pick_folder,
             commands::pick_file,
             commands::open_in_explorer,
+            commands::enable_protocol_dispatcher,
+            commands::restore_original_protocols,
+            commands::get_protocol_dispatcher_status,
+            commands::set_active_auth_instance,
+            commands::dispatch_url_to_instance,
+            commands::list_conversations,
+            commands::import_conversations,
+            commands::transfer_conversation,
+            commands::get_shared_brain_status,
+            commands::sync_all_shared_brains,
+            commands::get_parent_binaries,
+            commands::set_parent_binaries,
+            commands::pick_executable_file,
+            commands::launch_parent_app,
+            commands::attach_instance_to_blackhole,
+            commands::detach_instance_from_blackhole,
+            commands::get_cosmic_systems_overview,
+            commands::sync_instance_conversations,
+            commands::sync_instance_brain,
+            commands::get_parent_process_status,
+            commands::terminate_parent_app,
+            commands::delete_conversation,
+            commands::get_all_antigravity_quotas,
+            commands::get_instance_quota_summary,
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

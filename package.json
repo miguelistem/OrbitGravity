@@ -1,7 +1,9 @@
 {
-  "name": "bettermultigravity",
+  "name": "orbitgravity",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "Antigravity Mission Control for Windows",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",

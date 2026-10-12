@@ -1,10 +1,10 @@
 [package]
-name = "app"
-version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
-license = ""
-repository = ""
+name = "orbitgravity"
+version = "1.0.0"
+description = "Antigravity Mission Control for Windows"
+authors = ["OrbitGravity Contributors"]
+license = "MIT"
+repository = "https://github.com/orbitgravity/orbitgravity"
 edition = "2024"
 rust-version = "1.90"
 

@@ -94,6 +94,8 @@ pub fn get_seed_data() -> FleetState {
             custom_flags: None,
             env_vars: None,
             app_type: Some("antigravity_ide".to_string()),
+            blackhole_sync: None,
+            sync_mode: Some("solar_system".to_string()),
         },
         Instance {
             id: "inst-2".to_string(),
@@ -111,6 +113,8 @@ pub fn get_seed_data() -> FleetState {
             custom_flags: None,
             env_vars: None,
             app_type: Some("antigravity".to_string()),
+            blackhole_sync: None,
+            sync_mode: Some("solar_system".to_string()),
         },
         Instance {
             id: "inst-3".to_string(),
@@ -128,10 +132,27 @@ pub fn get_seed_data() -> FleetState {
             custom_flags: None,
             env_vars: None,
             app_type: Some("antigravity_ide".to_string()),
+            blackhole_sync: None,
+            sync_mode: Some("solar_system".to_string()),
         },
     ];
 
-    FleetState { accounts, instances }
+    FleetState {
+        accounts,
+        instances,
+        parent_binaries: Some(detect_default_parent_binaries()),
+    }
+}
+
+/// Helper to detect default parent binaries
+pub fn detect_default_parent_binaries() -> crate::models::ParentBinaries {
+    let app = crate::detector::detect_binary_for_app_type("app").map(|p| p.to_string_lossy().to_string());
+    let ide = crate::detector::detect_binary_for_app_type("ide").map(|p| p.to_string_lossy().to_string());
+    crate::models::ParentBinaries {
+        app_path: app,
+        ide_path: ide,
+        custom_configured: false,
+    }
 }
 
 /// Updates account link counters and running statuses dynamically.
@@ -159,6 +180,15 @@ pub fn load_fleet_state() -> FleetState {
     if path.exists() {
         if let Ok(content) = std::fs::read_to_string(&path) {
             if let Ok(mut state) = serde_json::from_str::<FleetState>(&content) {
+                if state.parent_binaries.is_none() {
+                    let app = crate::detector::detect_binary_for_app_type("app").map(|p| p.to_string_lossy().to_string());
+                    let ide = crate::detector::detect_binary_for_app_type("ide").map(|p| p.to_string_lossy().to_string());
+                    state.parent_binaries = Some(crate::models::ParentBinaries {
+                        app_path: app,
+                        ide_path: ide,
+                        custom_configured: false,
+                    });
+                }
                 sync_account_stats(&mut state);
                 return state;
             }

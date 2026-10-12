@@ -25,6 +25,10 @@ export interface AntigravityAccount {
 
 export type AntigravityAppType = 'antigravity_ide' | 'antigravity';
 
+export type InstanceTier = 'Free' | 'Plus' | 'Pro';
+
+export type GravitationalSyncMode = 'solo' | 'solar_system' | 'black_hole';
+
 export interface AntigravityInstance {
   id: string;
   name: string;
@@ -32,6 +36,7 @@ export interface AntigravityInstance {
   tag: string;
   color: string;
   icon: string;
+  tier?: InstanceTier;
   status: InstanceStatus;
   accountId: string;
   appType?: AntigravityAppType;
@@ -52,6 +57,8 @@ export interface AntigravityInstance {
   totalElapsedSeconds: number; // Real session duration in seconds
   lastActivityAt: number;
   createdAt: string;
+  blackholeSync?: boolean;
+  syncMode?: GravitationalSyncMode;
 }
 
 export interface LogEntry {
@@ -69,3 +76,53 @@ export interface DesktopShortcutConfig {
   account?: AntigravityAccount;
   platform: 'windows' | 'mac' | 'linux' | 'uri';
 }
+
+export interface ConversationInfo {
+  id: string;
+  title: string;
+  preview: string;
+  step_count: number;
+  last_modified: string;
+  source_name: string;
+}
+
+export interface SharedBrainStatus {
+  group_name: string;
+  is_shared: boolean;
+  member_count: number;
+  shared_path?: string;
+  members: string[];
+}
+
+export interface ParentBinaries {
+  appPath?: string;
+  idePath?: string;
+  customConfigured?: boolean;
+}
+
+export interface SolarSystemInfo {
+  name: string;
+  starBrainPath: string;
+  isShared: boolean;
+  totalConversations: number;
+  planets: AntigravityInstance[];
+}
+
+export interface BlackHoleInfo {
+  name: string;
+  appPath?: string;
+  idePath?: string;
+  appValid: boolean;
+  ideValid: boolean;
+  appRunning?: boolean;
+  ideRunning?: boolean;
+  globalConversationsCount: number;
+  globalBrainPath: string;
+}
+
+export interface CosmicOverview {
+  blackHole: BlackHoleInfo;
+  solarSystems: SolarSystemInfo[];
+  roguePlanets: AntigravityInstance[];
+}
+

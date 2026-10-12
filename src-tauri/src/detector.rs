@@ -124,7 +124,9 @@ pub fn get_system_extensions_dir() -> PathBuf {
         // Return .antigravity-ide/extensions as default target
         ide_ext
     } else {
-        PathBuf::from(r"C:\Users\Default\.antigravity-ide\extensions")
+        std::env::var("USERPROFILE")
+            .map(|u| PathBuf::from(u).join(".antigravity-ide").join("extensions"))
+            .unwrap_or_else(|_| PathBuf::from(".antigravity-ide").join("extensions"))
     }
 }
 

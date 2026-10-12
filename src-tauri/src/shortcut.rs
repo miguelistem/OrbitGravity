@@ -75,7 +75,9 @@ pub fn get_shortcut_destination(instance_name: &str, location: Option<&str>) -> 
     } else if let Some(home) = dirs::home_dir() {
         home.join("Desktop").join(file_name)
     } else {
-        PathBuf::from(r"C:\Users\Public\Desktop").join(file_name)
+        std::env::var("PUBLIC")
+            .map(|p| PathBuf::from(p).join("Desktop").join(&file_name))
+            .unwrap_or_else(|_| PathBuf::from("Desktop").join(&file_name))
     }
 }
 
@@ -119,14 +121,23 @@ pub fn create_instance_desktop_shortcut(
         }
     }
 
+    let roaming_dir = profile_path.join("appdata").join("Roaming");
+    let local_dir = profile_path.join("appdata").join("Local");
+
     let bat_content = format!(
         "@echo off\r\n\
          title Antigravity - {name}\r\n\
          REM OrbitGravity isolated profile launcher\r\n\
          set SSH_CONNECTION=127.0.0.1 1234 127.0.0.1 22\r\n\
+         set APPDATA={roaming}\r\n\
+         set LOCALAPPDATA={local}\r\n\
+         set USERPROFILE={profile}\r\n\
          {env_lines}\
          start \"\" \"{bin}\" --user-data-dir=\"{data}\" --extensions-dir=\"{ext}\" --new-window{flags}{ws}\r\n",
         name = instance.name,
+        roaming = roaming_dir.display(),
+        local = local_dir.display(),
+        profile = profile_path.display(),
         env_lines = env_lines,
         bin = target_binary.display(),
         data = data_dir.display(),

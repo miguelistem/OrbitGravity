@@ -1,5 +1,5 @@
 use std::path::Path;
-use sysinfo::{ProcessesToUpdate, System, Pid};
+use sysinfo::{ProcessesToUpdate, System, Pid, ProcessRefreshKind};
 use crate::models::Instance;
 use crate::detector::detect_binary_for_app_type;
 use crate::junction::setup_profile_directories;
@@ -7,7 +7,11 @@ use crate::junction::setup_profile_directories;
 /// Refreshes the running status and PIDs of all instances.
 pub fn refresh_instances_status(instances: &mut [Instance]) {
     let mut sys = System::new();
-    sys.refresh_processes(ProcessesToUpdate::All, true);
+    sys.refresh_processes_specifics(
+        ProcessesToUpdate::All,
+        true,
+        ProcessRefreshKind::everything(),
+    );
 
     for instance in instances.iter_mut() {
         let profile_norm = instance.profile_dir.to_lowercase().replace('/', "\\");
@@ -52,6 +56,269 @@ pub fn refresh_instances_status(instances: &mut [Instance]) {
             instance.pid = None;
         }
     }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ParentProcessInfo {
+    pub is_running: bool,
+    pub app_running: bool,
+    pub ide_running: bool,
+    pub pids: Vec<u32>,
+}
+
+/// Helper to determine if a process is a genuine parent Antigravity/IDE process
+/// rather than an isolated instance profile sandbox.
+pub fn is_parent_antigravity_process(name: &str, cmd_str: &str) -> (bool, bool) {
+    let name_lower = name.to_lowercase();
+    let cmd_lower = cmd_str.to_lowercase();
+
+    let is_antigravity = name_lower.contains("antigravity")
+        || cmd_lower.contains("antigravity.exe")
+        || cmd_lower.contains("antigravity ide.exe");
+
+    if !is_antigravity {
+        return (false, false);
+    }
+
+    // Defensive check: If cmd_str is empty/whitespace, we cannot verify whether
+    // --user-data-dir is present. We must NEVER assume an unknown CLI is the parent app,
+    // as doing so could falsely classify an instance sandbox and trigger accidental termination.
+    if cmd_lower.trim().is_empty() {
+        return (false, false);
+    }
+
+    // Isolated profile sandboxes ALWAYS include --user-data-dir in their CLI arguments.
+    // Genuine parent processes NEVER include --user-data-dir.
+    // Also guard against profile folder names in cmd line.
+    if cmd_lower.contains("--user-data-dir") || cmd_lower.contains("antigravityprofile") {
+        return (false, false);
+    }
+
+    let is_ide = name_lower.contains("ide") || cmd_lower.contains("ide");
+    (true, is_ide)
+}
+
+/// Retrieves real-time process telemetry for genuine parent Antigravity / IDE applications.
+pub fn get_parent_process_info() -> ParentProcessInfo {
+    get_parent_process_info_with_tracked(None)
+}
+
+/// Retrieves real-time process telemetry with optional active tracked PIDs.
+pub fn get_parent_process_info_with_tracked(tracked_pids: Option<&[u32]>) -> ParentProcessInfo {
+    let mut sys = System::new();
+    sys.refresh_processes_specifics(
+        ProcessesToUpdate::All,
+        true,
+        ProcessRefreshKind::everything(),
+    );
+
+    let mut app_running = false;
+    let mut ide_running = false;
+    let mut pids = Vec::new();
+
+    // Check tracked PIDs if supplied
+    if let Some(tracked) = tracked_pids {
+        for &pid_u32 in tracked {
+            let sys_pid = Pid::from_u32(pid_u32);
+            if let Some(proc) = sys.process(sys_pid) {
+                let name = proc.name().to_string_lossy().to_lowercase();
+                let cmd: Vec<String> = proc.cmd().iter().map(|s| s.to_string_lossy().to_string()).collect();
+                let cmd_str = cmd.join(" ").to_lowercase();
+                // Never treat a profile sandbox as parent even if PID was in tracked
+                if cmd_str.contains("--user-data-dir") || cmd_str.contains("antigravityprofile") {
+                    continue;
+                }
+                let is_ide = name.contains("ide") || cmd_str.contains("ide");
+                if is_ide {
+                    ide_running = true;
+                } else {
+                    app_running = true;
+                }
+                if !pids.contains(&pid_u32) {
+                    pids.push(pid_u32);
+                }
+            }
+        }
+    }
+
+    // Process table scan for genuine parent application
+    for (pid, proc) in sys.processes() {
+        let name = proc.name().to_string_lossy();
+        let cmd: Vec<String> = proc.cmd().iter().map(|s| s.to_string_lossy().to_string()).collect();
+        let cmd_str = cmd.join(" ");
+
+        let (is_parent, is_ide) = is_parent_antigravity_process(&name, &cmd_str);
+        if is_parent {
+            if is_ide {
+                ide_running = true;
+            } else {
+                app_running = true;
+            }
+            let pid_u32 = pid.as_u32();
+            if !pids.contains(&pid_u32) {
+                pids.push(pid_u32);
+            }
+        }
+    }
+
+    ParentProcessInfo {
+        is_running: app_running || ide_running,
+        app_running,
+        ide_running,
+        pids,
+    }
+}
+
+/// Checks whether the genuine parent Antigravity or Antigravity IDE application is currently active.
+pub fn is_parent_antigravity_running() -> bool {
+    is_parent_antigravity_running_with_tracked(None)
+}
+
+pub fn is_parent_antigravity_running_with_tracked(tracked_pids: Option<&[u32]>) -> bool {
+    get_parent_process_info_with_tracked(tracked_pids).is_running
+}
+
+/// Terminates genuine parent Antigravity / IDE processes using Windows taskkill.
+pub fn terminate_parent_antigravity(variant: Option<&str>) -> Result<usize, String> {
+    terminate_parent_antigravity_with_tracked(variant, None)
+}
+
+pub fn terminate_parent_antigravity_with_tracked(variant: Option<&str>, tracked_pids: Option<&[u32]>) -> Result<usize, String> {
+    let mut sys = System::new();
+    sys.refresh_processes_specifics(
+        ProcessesToUpdate::All,
+        true,
+        ProcessRefreshKind::everything(),
+    );
+
+    let mut pids_to_kill = Vec::new();
+    let filter = variant.unwrap_or("all").to_lowercase();
+
+    // Include any tracked PIDs after verifying they are NOT profile sandboxes
+    if let Some(tracked) = tracked_pids {
+        for &pid_u32 in tracked {
+            let sys_pid = Pid::from_u32(pid_u32);
+            if let Some(proc) = sys.process(sys_pid) {
+                let cmd: Vec<String> = proc.cmd().iter().map(|s| s.to_string_lossy().to_string()).collect();
+                let cmd_str = cmd.join(" ").to_lowercase();
+                if cmd_str.contains("--user-data-dir") || cmd_str.contains("antigravityprofile") {
+                    continue;
+                }
+            }
+            if !pids_to_kill.contains(&pid_u32) {
+                pids_to_kill.push(pid_u32);
+            }
+        }
+    }
+
+    for (pid, proc) in sys.processes() {
+        let name = proc.name().to_string_lossy();
+        let cmd: Vec<String> = proc.cmd().iter().map(|s| s.to_string_lossy().to_string()).collect();
+        let cmd_str = cmd.join(" ");
+
+        let (is_parent, is_ide) = is_parent_antigravity_process(&name, &cmd_str);
+        if is_parent {
+            let should_kill = match filter.as_str() {
+                "ide" => is_ide,
+                "app" => !is_ide,
+                _ => true,
+            };
+
+            if should_kill {
+                let pid_u32 = pid.as_u32();
+                if !pids_to_kill.contains(&pid_u32) {
+                    pids_to_kill.push(pid_u32);
+                }
+            }
+        }
+    }
+
+    if pids_to_kill.is_empty() {
+        return Ok(0);
+    }
+
+    let mut killed_count = 0;
+    for pid in &pids_to_kill {
+        let _ = std::process::Command::new("taskkill.exe")
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .output();
+        killed_count += 1;
+    }
+
+    Ok(killed_count)
+}
+
+/// Enforces mutual exclusion:
+/// 1. Black Hole: Parent app and tethered instances cannot run concurrently.
+/// 2. Solar Systems: Only one instance per app variant (Desktop vs IDE) can run in a category at a time.
+pub fn check_launch_concurrency_guard(target: &Instance, all_instances: &[Instance]) -> Result<(), String> {
+    check_launch_concurrency_guard_with_tracked(target, all_instances, None)
+}
+
+pub fn check_launch_concurrency_guard_with_tracked(
+    target: &Instance,
+    all_instances: &[Instance],
+    tracked_parent_pids: Option<&[u32]>,
+) -> Result<(), String> {
+    let is_blackhole = target.blackhole_sync == Some(true) || target.sync_mode.as_deref() == Some("black_hole");
+
+    if is_blackhole {
+        if is_parent_antigravity_running_with_tracked(tracked_parent_pids) {
+            return Err("Parent Antigravity application is currently running. Please close the parent application before launching a Black Hole tethered instance.".to_string());
+        }
+
+        for inst in all_instances {
+            if inst.id != target.id && inst.status == "running" {
+                if inst.blackhole_sync == Some(true) || inst.sync_mode.as_deref() == Some("black_hole") {
+                    return Err(format!(
+                        "Instance '{}' is currently running tethered to The Black Hole. Stop it before launching another Black Hole instance.",
+                        inst.name
+                    ));
+                }
+            }
+        }
+    } else if target.sync_mode.as_deref() != Some("solo") {
+        let target_group = if let Some(parent) = Path::new(&target.profile_dir).parent() {
+            let p_name = parent.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if p_name.to_lowercase() != "antigravityprofiles" && !p_name.is_empty() {
+                p_name.to_string()
+            } else {
+                "General".to_string()
+            }
+        } else {
+            "General".to_string()
+        };
+
+        let target_app_type = target.app_type.as_deref().unwrap_or("antigravity_ide");
+
+        for inst in all_instances {
+            if inst.id != target.id && inst.status == "running" {
+                let inst_group = if let Some(parent) = Path::new(&inst.profile_dir).parent() {
+                    let p_name = parent.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                    if p_name.to_lowercase() != "antigravityprofiles" && !p_name.is_empty() {
+                        p_name.to_string()
+                    } else {
+                        "General".to_string()
+                    }
+                } else {
+                    "General".to_string()
+                };
+
+                let inst_app_type = inst.app_type.as_deref().unwrap_or("antigravity_ide");
+
+                if inst_group.eq_ignore_ascii_case(&target_group) && inst_app_type == target_app_type {
+                    let type_label = if target_app_type.contains("ide") { "IDE" } else { "Desktop App" };
+                    return Err(format!(
+                        "Another {} instance ('{}') in Solar System '{}' is currently running. Close it before launching '{}' to preserve Star Brain integrity.",
+                        type_label, inst.name, target_group, target.name
+                    ));
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Spawns an Antigravity instance with complete environment isolation.
@@ -139,7 +406,11 @@ pub fn stop_antigravity_instance(instance: &mut Instance) -> Result<(), String> 
     // Also check if any lingering process uses the profile dir
     let profile_norm = instance.profile_dir.to_lowercase().replace('/', "\\");
     let mut sys = System::new();
-    sys.refresh_processes(ProcessesToUpdate::All, true);
+    sys.refresh_processes_specifics(
+        ProcessesToUpdate::All,
+        true,
+        ProcessRefreshKind::everything(),
+    );
 
     for (pid, proc) in sys.processes() {
         let cmd: Vec<String> = proc.cmd().iter().map(|s| s.to_string_lossy().to_string()).collect();

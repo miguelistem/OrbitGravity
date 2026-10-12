@@ -1,0 +1,67 @@
+<svg width="512" height="512" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Fine background coordinate grid pattern -->
+    <pattern id="orbit-grid" width="10" height="10" patternUnits="userSpaceOnUse">
+      <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#26282E" stroke-width="0.75" />
+    </pattern>
+
+    <!-- Iridescent spectrum gradient (Blue -> Cyan -> Green -> Orange -> Coral Red) -->
+    <linearGradient id="orbit-grad" x1="15" y1="80" x2="85" y2="25" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2563EB" />
+      <stop offset="25%" stop-color="#0EA5E9" />
+      <stop offset="48%" stop-color="#10B981" />
+      <stop offset="72%" stop-color="#F59E0B" />
+      <stop offset="100%" stop-color="#EF4444" />
+    </linearGradient>
+
+    <linearGradient id="orbit-mesh" x1="50" y1="20" x2="50" y2="85" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#EF4444" stop-opacity="0.85" />
+      <stop offset="35%" stop-color="#EAB308" stop-opacity="0.8" />
+      <stop offset="70%" stop-color="#06B6D4" stop-opacity="0.75" />
+      <stop offset="100%" stop-color="#3B82F6" stop-opacity="0.9" />
+    </linearGradient>
+
+    <!-- Soft crest ambient glow -->
+    <radialGradient id="crest-glow" cx="50" cy="28" r="28" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F97316" stop-opacity="0.3" />
+      <stop offset="100%" stop-color="#F97316" stop-opacity="0" />
+    </radialGradient>
+
+    <clipPath id="squircle-clip">
+      <rect x="2" y="2" width="96" height="96" rx="26" />
+    </clipPath>
+  </defs>
+
+  <!-- Dark squircle container matching OrbitGravity brand -->
+  <rect
+    x="2"
+    y="2"
+    width="96"
+    height="96"
+    rx="26"
+    fill="#121316"
+    stroke="#2A2C34"
+    stroke-width="1.5"
+  />
+
+  <!-- Subtle coordinate grid clip inside squircle -->
+  <g clip-path="url(#squircle-clip)">
+    <rect x="2" y="2" width="96" height="96" rx="26" fill="url(#orbit-grid)" opacity="0.8" />
+  </g>
+
+  <!-- Ambient glow behind crest -->
+  <circle cx="50" cy="30" r="25" fill="url(#crest-glow)" />
+
+  <!-- Smooth sculptural orbital arch curve (Gaussian wave / trajectory arch) -->
+  <path
+    d="M 23 76 C 25 72, 31 58, 36 43 C 41 30, 44 24, 50 24 C 56 24, 59 30, 64 43 C 69 58, 75 72, 77 76 C 75 79, 70 79, 65 71 C 58 57, 54 47, 50 47 C 46 47, 42 57, 35 71 C 30 79, 25 79, 23 76 Z"
+    fill="url(#orbit-grad)"
+  />
+
+  <!-- Sheen & volumetric blend overlay -->
+  <path
+    d="M 23 76 C 25 72, 31 58, 36 43 C 41 30, 44 24, 50 24 C 56 24, 59 30, 64 43 C 69 58, 75 72, 77 76 C 75 79, 70 79, 65 71 C 58 57, 54 47, 50 47 C 46 47, 42 57, 35 71 C 30 79, 25 79, 23 76 Z"
+    fill="url(#orbit-mesh)"
+    opacity="0.6"
+  />
+</svg>

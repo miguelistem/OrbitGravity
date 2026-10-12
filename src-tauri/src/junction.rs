@@ -91,5 +91,38 @@ pub fn setup_profile_directories(profile_dir: &Path, mode: &str) -> Result<(), S
         }
     }
 
+    // Ensure Windows user shell folders exist under isolated USERPROFILE so file pickers never error
+    let real_home = dirs::home_dir()
+        .or_else(|| std::env::var("USERPROFILE").ok().map(std::path::PathBuf::from))
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+
+    for shell_folder in &["Desktop", "Documents", "Downloads"] {
+        let profile_folder = profile_dir.join(shell_folder);
+        let real_folder = real_home.join(shell_folder);
+        if !profile_folder.exists() {
+            if real_folder.exists() {
+                let _ = create_junction(&profile_folder, &real_folder);
+            }
+            if !profile_folder.exists() {
+                let _ = std::fs::create_dir_all(&profile_folder);
+            }
+        }
+    }
+
+    // Ensure .gemini/config is linked into profile so language server finds projects, rules, and settings
+    let profile_gemini = profile_dir.join(".gemini");
+    let _ = std::fs::create_dir_all(&profile_gemini);
+    let profile_config = profile_gemini.join("config");
+    let real_config = real_home.join(".gemini").join("config");
+    if !profile_config.exists() {
+        if real_config.exists() {
+            let _ = create_junction(&profile_config, &real_config);
+        }
+        if !profile_config.exists() {
+            let _ = std::fs::create_dir_all(&profile_config);
+        }
+    }
+
     Ok(())
 }
+
