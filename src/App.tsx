@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { isTauri } from './api';
 import { AntigravityInstance, AntigravityAccount, LogEntry, InstanceStatus, AntigravityAppType, InstanceTier } from './types/antigravity';
 import { INITIAL_ACCOUNTS, INITIAL_INSTANCES, INITIAL_LOGS } from './mock/initialData';
@@ -553,56 +554,77 @@ export default function App() {
     return 'stopped';
   };
 
-  const handleMinimizeWindow = async (e: React.MouseEvent) => {
+  const handleMinimizeWindow = (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('window_minimize');
+      getCurrentWindow().minimize().catch(() => {
+        invoke('window_minimize').catch(() => {});
+      });
     } catch {
       try {
-        const { getCurrentWindow } = await import('@tauri-apps/api/window');
-        await getCurrentWindow().minimize();
+        invoke('window_minimize').catch(() => {});
       } catch {}
     }
   };
 
-  const handleMaximizeWindow = async (e: React.MouseEvent) => {
+  const handleMaximizeWindow = (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('window_toggle_maximize');
+      getCurrentWindow().toggleMaximize().catch(() => {
+        invoke('window_toggle_maximize').catch(() => {});
+      });
     } catch {
       try {
-        const { getCurrentWindow } = await import('@tauri-apps/api/window');
-        await getCurrentWindow().toggleMaximize();
+        invoke('window_toggle_maximize').catch(() => {});
       } catch {}
     }
   };
 
-  const handleCloseWindow = async (e: React.MouseEvent) => {
+  const handleCloseWindow = (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('window_close');
+      getCurrentWindow().close().catch(() => {
+        invoke('window_close').catch(() => {});
+      });
     } catch {
       try {
-        const { getCurrentWindow } = await import('@tauri-apps/api/window');
-        await getCurrentWindow().close();
+        invoke('window_close').catch(() => {});
       } catch {}
     }
   };
 
-  const handleStartDrag = async (e: React.MouseEvent) => {
-    if (e.button === 0 && !(e.target as HTMLElement).closest('button, a, input, select')) {
+  const handleStartDrag = (e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement | null;
+    if (target && target.closest('button, a, input, select, textarea, [role="button"], .no-drag')) {
+      return;
+    }
+
+    try {
+      getCurrentWindow().startDragging().catch(() => {
+        invoke('window_start_drag').catch(() => {});
+      });
+    } catch {
       try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        await invoke('window_start_drag');
-      } catch {
-        try {
-          const { getCurrentWindow } = await import('@tauri-apps/api/window');
-          await getCurrentWindow().startDragging();
-        } catch {}
-      }
+        invoke('window_start_drag').catch(() => {});
+      } catch {}
+    }
+  };
+
+  const handleToggleMaximize = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement | null;
+    if (target && target.closest('button, a, input, select, textarea, [role="button"], .no-drag')) {
+      return;
+    }
+
+    try {
+      getCurrentWindow().toggleMaximize().catch(() => {
+        invoke('window_toggle_maximize').catch(() => {});
+      });
+    } catch {
+      try {
+        invoke('window_toggle_maximize').catch(() => {});
+      } catch {}
     }
   };
 
@@ -612,12 +634,19 @@ export default function App() {
       <div
         data-tauri-drag-region
         onMouseDown={handleStartDrag}
+        onDoubleClick={handleToggleMaximize}
         className="h-10 bg-[#16171B] border-b border-[#23242A] flex items-center justify-between pl-3.5 pr-0 shrink-0 text-xs text-[#9DA1B0] select-none cursor-default"
       >
         {/* Left Window Menu with OrbitGravity Brand & Menu Items */}
-        <div className="flex items-center gap-4 pointer-events-auto pl-1">
-          <span className="font-bold text-[16px] text-white tracking-tight">OrbitGravity</span>
-          <div className="flex items-center gap-3 text-[13px] text-[#A6ABB8]">
+        <div className="flex items-center gap-4 pl-1" data-tauri-drag-region>
+          <span
+            data-tauri-drag-region
+            onMouseDown={handleStartDrag}
+            className="font-bold text-[16px] text-white tracking-tight cursor-default select-none"
+          >
+            OrbitGravity
+          </span>
+          <div className="flex items-center gap-3 text-[13px] text-[#A6ABB8] no-drag">
             <span className="hover:text-white cursor-pointer px-1.5 py-0.5 rounded hover:bg-zinc-800/50 transition">View</span>
             <span className="hover:text-white cursor-pointer px-1.5 py-0.5 rounded hover:bg-zinc-800/50 transition">Window</span>
 
@@ -634,7 +663,7 @@ export default function App() {
               </button>
 
               {isHelpDropdownOpen && (
-                <div className="absolute left-0 mt-1.5 w-56 bg-[#16171E] border border-[#2B2E3C] rounded-xl shadow-2xl z-50 py-1.5 text-xs divide-y divide-[#222530] animate-in fade-in zoom-in-95 duration-100">
+                <div className="absolute left-0 mt-1.5 w-56 bg-[#16171E] border border-[#2B2E3C] rounded-xl shadow-2xl z-50 py-1.5 text-xs divide-y divide-[#222530] animate-in fade-in zoom-in-95 duration-100 no-drag">
                   <div className="px-1 py-1">
                     <button
                       type="button"
@@ -679,7 +708,7 @@ export default function App() {
 
                   <div className="px-3 py-1.5 text-[10px] text-zinc-500 font-mono flex items-center justify-between">
                     <span>OrbitGravity</span>
-                    <span className="text-zinc-400">v1.0.6</span>
+                    <span className="text-zinc-400">v1.0.7</span>
                   </div>
                 </div>
               )}
@@ -687,18 +716,25 @@ export default function App() {
           </div>
         </div>
 
-        {/* Center Session Title */}
+        {/* Center Draggable Spacer & Session Title (spans full remaining middle space) */}
         <div
           data-tauri-drag-region
           onMouseDown={handleStartDrag}
-          className="text-[12px] font-mono text-[#7D8290] truncate max-w-sm hidden md:block pointer-events-none"
+          onDoubleClick={handleToggleMaximize}
+          className="flex-1 h-full flex items-center justify-center cursor-default min-w-[50px] px-4"
         >
-          {activeInstance?.name ? activeInstance.name : 'OrbitGravity Fleet'}
+          <div
+            data-tauri-drag-region
+            className="text-[12px] font-mono text-[#7D8290] truncate max-w-sm hidden md:block select-none pointer-events-none"
+          >
+            {activeInstance?.name ? activeInstance.name : 'OrbitGravity Fleet'}
+          </div>
         </div>
 
         {/* Right Windows Control Buttons - Standard Windows 11 size */}
-        <div className="flex items-center h-full text-xs">
+        <div className="flex items-center h-full text-xs no-drag pointer-events-auto">
           <button
+            type="button"
             onClick={handleMinimizeWindow}
             className="hover:text-white hover:bg-[#252730] w-11 h-10 flex items-center justify-center text-[#B0B4C0] cursor-pointer transition-colors"
             title="Minimize"
@@ -706,6 +742,7 @@ export default function App() {
             —
           </button>
           <button
+            type="button"
             onClick={handleMaximizeWindow}
             className="hover:text-white hover:bg-[#252730] w-11 h-10 flex items-center justify-center text-[#B0B4C0] cursor-pointer transition-colors"
             title="Maximize"
@@ -713,6 +750,7 @@ export default function App() {
             🗖
           </button>
           <button
+            type="button"
             onClick={handleCloseWindow}
             className="hover:text-white hover:bg-[#E81123] w-11 h-10 flex items-center justify-center text-[#B0B4C0] cursor-pointer transition-colors"
             title="Close"

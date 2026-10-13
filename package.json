@@ -1,7 +1,7 @@
 {
   "name": "orbitgravity",
   "private": true,
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Antigravity Mission Control for Windows",
   "license": "MIT",
   "type": "module",

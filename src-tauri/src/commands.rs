@@ -648,6 +648,10 @@ pub fn window_close(window: tauri::Window) -> Result<(), String> {
 
 #[tauri::command]
 pub fn window_start_drag(window: tauri::Window) -> Result<(), String> {
+    let win_clone = window.clone();
+    let _ = window.run_on_main_thread(move || {
+        let _ = win_clone.start_dragging();
+    });
     window.start_dragging().map_err(|e| e.to_string())
 }
 
