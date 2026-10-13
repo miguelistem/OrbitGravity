@@ -1787,9 +1787,64 @@ fn test_transfer_to_black_hole_and_two_party_stopped_rule() {
         &conv_id,
     );
     assert!(res.is_ok(), "copy_conversation_to_target_global must succeed");
-
     let _ = std::fs::remove_dir_all(&temp_root);
 }
 
+#[test]
+fn test_installer_custom_template_zero_uninstaller_invocations() {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let nsi_path = manifest_dir.join("custom-installer.nsi");
+    assert!(nsi_path.exists(), "custom-installer.nsi must exist");
 
+    let content = std::fs::read_to_string(&nsi_path).expect("read custom-installer.nsi");
 
+    // 1. Assert that PageReinstall and PageLeaveReinstall were completely excised
+    assert!(!content.contains("Page custom PageReinstall"), "Installer must NOT have PageReinstall");
+    assert!(!content.contains("Function PageReinstall"), "Installer must NOT have PageReinstall function");
+    assert!(!content.contains("Function PageLeaveReinstall"), "Installer must NOT have PageLeaveReinstall function");
+    assert!(!content.contains("reinst_uninstall"), "Installer must NOT have reinst_uninstall label");
+
+    // 2. Assert that no installer section or init function invokes uninstall.exe
+    for (idx, line) in content.lines().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.starts_with(';') { continue; }
+        if (trimmed.contains("ExecWait") || trimmed.contains("Exec")) && trimmed.contains("uninstall.exe") {
+            panic!("Dangerous: line {} invokes uninstall.exe: {}", idx + 1, trimmed);
+        }
+    }
+}
+
+#[test]
+fn test_installer_hooks_never_touch_antigravity_profiles() {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let hook_path = manifest_dir.join("installer-hooks.nsh");
+    assert!(hook_path.exists(), "installer-hooks.nsh must exist");
+
+    let content = std::fs::read_to_string(&hook_path).expect("read installer-hooks.nsh");
+
+    // Assert that no command touches AntigravityProfiles or $PROFILE
+    for (idx, line) in content.lines().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.starts_with(';') { continue; }
+        if trimmed.contains("AntigravityProfiles") {
+            panic!("Dangerous: line {} references AntigravityProfiles: {}", idx + 1, trimmed);
+        }
+        if trimmed.contains("RMDir") && trimmed.contains("$PROFILE") {
+            panic!("Dangerous: line {} deletes from $PROFILE: {}", idx + 1, trimmed);
+        }
+    }
+}
+
+#[test]
+fn test_tauri_conf_nsis_wires_custom_installer_template() {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let conf_path = manifest_dir.join("tauri.conf.json");
+    assert!(conf_path.exists(), "tauri.conf.json must exist");
+
+    let content = std::fs::read_to_string(&conf_path).expect("read tauri.conf.json");
+    let json: serde_json::Value = serde_json::from_str(&content).expect("parse tauri.conf.json");
+
+    let template = json.pointer("/bundle/windows/nsis/template")
+        .and_then(|v| v.as_str());
+    assert_eq!(template, Some("./custom-installer.nsi"), "Tauri config must wire custom-installer.nsi");
+}

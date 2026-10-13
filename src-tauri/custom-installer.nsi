@@ -495,11 +495,17 @@ Section Install
     WriteRegStr SHCTX "${UNINSTKEY}" $MultiUser.InstallMode 1
   !endif
 
-  ; Remove old main binary if it doesn't match new main binary name
+  ; Remove old main binary if it doesn't match new main binary name (strictly isolated to $INSTDIR, no path separators)
   ReadRegStr $OldMainBinaryName SHCTX "${UNINSTKEY}" "MainBinaryName"
   ${If} $OldMainBinaryName != ""
   ${AndIf} $OldMainBinaryName != "${MAINBINARYNAME}.exe"
-    Delete "$INSTDIR\$OldMainBinaryName"
+  ${AndIf} ${FileExists} "$INSTDIR\$OldMainBinaryName"
+    ${StrLoc} $R0 $OldMainBinaryName "\" ">"
+    ${StrLoc} $R1 $OldMainBinaryName "/" ">"
+    ${If} $R0 == ""
+    ${AndIf} $R1 == ""
+      Delete "$INSTDIR\$OldMainBinaryName"
+    ${EndIf}
   ${EndIf}
 
   ; Save current MAINBINARYNAME for future updates
@@ -687,8 +693,12 @@ Section Uninstall
     DeleteRegKey /ifempty HKCU "${MANUKEY}"
 
     SetShellVarContext current
-    RmDir /r "$APPDATA\${BUNDLEID}"
-    RmDir /r "$LOCALAPPDATA\${BUNDLEID}"
+    ${If} $APPDATA != ""
+      RmDir /r "$APPDATA\${BUNDLEID}"
+    ${EndIf}
+    ${If} $LOCALAPPDATA != ""
+      RmDir /r "$LOCALAPPDATA\${BUNDLEID}"
+    ${EndIf}
   ${EndIf}
 
   !ifmacrodef NSIS_HOOK_POSTUNINSTALL
