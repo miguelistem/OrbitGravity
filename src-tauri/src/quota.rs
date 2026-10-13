@@ -87,13 +87,37 @@ pub fn find_oauth_token_path(instance: &Instance) -> Option<PathBuf> {
         return Some(direct);
     }
 
-    // Check Black Hole fallback if tethered
-    let is_bh = instance.blackhole_sync == Some(true) || instance.sync_mode.as_deref() == Some("black_hole");
+    // Check Black Hole fallback if tethered or if querying the parent singularity
+    let is_bh = instance.id == "black_hole_parent"
+        || instance.id == "blackhole"
+        || instance.blackhole_sync == Some(true)
+        || instance.sync_mode.as_deref() == Some("black_hole");
+
     if is_bh {
         if let Some(home) = dirs::home_dir() {
-            let global = home.join(".gemini").join("jetski-standalone-oauth-token");
-            if global.exists() {
-                return Some(global);
+            let p1 = home.join(".gemini").join("jetski-standalone-oauth-token");
+            if p1.exists() {
+                return Some(p1);
+            }
+            let p2 = home.join(".antigravity").join("jetski-standalone-oauth-token");
+            if p2.exists() {
+                return Some(p2);
+            }
+            let p3 = home.join(".antigravity-ide").join("jetski-standalone-oauth-token");
+            if p3.exists() {
+                return Some(p3);
+            }
+        }
+
+        if let Ok(userprofile) = std::env::var("USERPROFILE") {
+            let pb = PathBuf::from(&userprofile);
+            let p1 = pb.join(".gemini").join("jetski-standalone-oauth-token");
+            if p1.exists() {
+                return Some(p1);
+            }
+            let p2 = pb.join(".antigravity").join("jetski-standalone-oauth-token");
+            if p2.exists() {
+                return Some(p2);
             }
         }
     }
@@ -105,6 +129,9 @@ pub fn find_oauth_token_path(instance: &Instance) -> Option<PathBuf> {
 pub fn extract_user_info_from_token_file(token_path: &Path) -> (Option<String>, Option<String>) {
     if let Ok(content) = std::fs::read_to_string(token_path) {
         if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(&content) {
+            let mut extracted_email = None;
+            let mut extracted_name = None;
+
             if let Some(id_tok) = json_val.get("id_token").and_then(|v| v.as_str()) {
                 let parts: Vec<&str> = id_tok.split('.').collect();
                 if parts.len() >= 2 {
@@ -112,19 +139,25 @@ pub fn extract_user_info_from_token_file(token_path: &Path) -> (Option<String>, 
                     while b64.len() % 4 != 0 {
                         b64.push('=');
                     }
-                    if let Ok(decoded_bytes) = std::fs::read(&token_path) {
-                        // Attempt fallback or parse payload
-                        let _ = decoded_bytes;
-                    }
                     if let Ok(decoded_bytes) = base64_sim_decode(&b64) {
                         if let Ok(payload_json) = serde_json::from_slice::<serde_json::Value>(&decoded_bytes) {
-                            let email = payload_json.get("email").and_then(|v| v.as_str()).map(|s| s.to_string());
-                            let name = payload_json.get("name").and_then(|v| v.as_str()).map(|s| s.to_string());
-                            return (email, name);
+                            extracted_email = payload_json.get("email").and_then(|v| v.as_str()).map(|s| s.to_string());
+                            extracted_name = payload_json.get("name").and_then(|v| v.as_str()).map(|s| s.to_string());
                         }
                     }
                 }
             }
+
+            // Fallback: check top-level or token-level email fields
+            if extracted_email.is_none() {
+                extracted_email = json_val.get("email")
+                    .or_else(|| json_val.get("user_email"))
+                    .or_else(|| json_val.get("account_id"))
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+            }
+
+            return (extracted_email, extracted_name);
         }
     }
     (None, None)
@@ -391,30 +424,33 @@ pub fn fetch_all_antigravity_app_quotas(instances: &[Instance]) -> Vec<InstanceQ
     let mut results = Vec::new();
 
     // Always include the virtual Black Hole Parent item as the singularity anchor
-    if let Some(home) = dirs::home_dir() {
-        let virtual_bh = Instance {
-            id: "black_hole_parent".to_string(),
-            name: "The Black Hole (Parent Singularity)".to_string(),
-            tag: Some("The Black Hole Singularity".to_string()),
-            account_id: "global-parent".to_string(),
-            mode: "auth-only".to_string(),
-            port: 0,
-            status: if crate::process::is_parent_antigravity_running() { "running".to_string() } else { "stopped".to_string() },
-            tokens_str: "Global".to_string(),
-            workspace_path: None,
-            profile_dir: home.to_string_lossy().to_string(),
-            pid: None,
-            last_used: "Active".to_string(),
-            binary_path: None,
-            custom_flags: None,
-            env_vars: None,
-            app_type: Some("antigravity".to_string()),
-            blackhole_sync: Some(true),
-            sync_mode: Some("black_hole".to_string()),
-            tier: Some("Pro".to_string()),
-        };
-        results.push(fetch_instance_quota(&virtual_bh));
-    }
+    let home_path = dirs::home_dir()
+        .map(|h| h.to_string_lossy().to_string())
+        .or_else(|| std::env::var("USERPROFILE").ok())
+        .unwrap_or_default();
+
+    let virtual_bh = Instance {
+        id: "black_hole_parent".to_string(),
+        name: "The Black Hole (Parent Singularity)".to_string(),
+        tag: Some("The Black Hole Singularity".to_string()),
+        account_id: "global-parent".to_string(),
+        mode: "auth-only".to_string(),
+        port: 0,
+        status: if crate::process::is_parent_antigravity_running() { "running".to_string() } else { "stopped".to_string() },
+        tokens_str: "Global".to_string(),
+        workspace_path: None,
+        profile_dir: home_path,
+        pid: None,
+        last_used: "Active".to_string(),
+        binary_path: None,
+        custom_flags: None,
+        env_vars: None,
+        app_type: Some("antigravity".to_string()),
+        blackhole_sync: Some(true),
+        sync_mode: Some("black_hole".to_string()),
+        tier: Some("Pro".to_string()),
+    };
+    results.push(fetch_instance_quota(&virtual_bh));
 
     for inst in instances {
         let app_type = inst.app_type.as_deref().unwrap_or("antigravity_ide");

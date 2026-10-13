@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { AntigravityInstance } from '../types/antigravity';
 import { InstanceQuotaResult, QuotaBucket } from '../types/quota';
-import { getAllAntigravityQuotas, getInstanceQuotaSummary } from '../api';
+import { getAllAntigravityQuotas, getInstanceQuotaSummary, isTauri } from '../api';
 import { EventHorizonIcon } from './EventHorizonIcon';
 import { 
   RotateCw, 
@@ -113,9 +114,23 @@ function CircularUsageRing({ fraction, percentage }: { fraction: number; percent
   );
 }
 
-const STORAGE_QUOTAS_CACHE = 'orbitgravity_event_horizon_cache_v1';
-const STORAGE_QUOTAS_FETCHED_AT = 'orbitgravity_event_horizon_fetched_at_v1';
-const STORAGE_EVENT_HORIZON_INITIALIZED = 'orbitgravity_event_horizon_initialized_v1';
+const STORAGE_QUOTAS_CACHE = 'orbitgravity_event_horizon_cache_v2';
+const STORAGE_QUOTAS_FETCHED_AT = 'orbitgravity_event_horizon_fetched_at_v2';
+
+const DEFAULT_PARENT_QUOTA: InstanceQuotaResult = {
+  instanceId: 'black_hole_parent',
+  instanceName: 'The Black Hole (Parent App)',
+  appType: 'antigravity',
+  profileDir: '',
+  status: 'stopped',
+  quotaStatus: 'no_token',
+  accountEmail: undefined,
+  accountName: undefined,
+  errorMessage: 'No active Google session detected in parent installation. Log in via Antigravity to show live quota.',
+  groups: [],
+  description: 'Singularity Root Anchor',
+  fetchedAt: new Date().toISOString(),
+};
 
 function formatTimeAgo(date: Date | null): string {
   if (!date) return 'Not updated yet';
@@ -141,9 +156,17 @@ export function InstanceUsageMonitorView({
   const [quotas, setQuotas] = useState<InstanceQuotaResult[]>(() => {
     try {
       const cached = localStorage.getItem(STORAGE_QUOTAS_CACHE);
-      if (cached) return JSON.parse(cached);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          if (!parsed.some((q) => q.instanceId === 'black_hole_parent' || q.instanceId === 'blackhole')) {
+            return [DEFAULT_PARENT_QUOTA, ...parsed];
+          }
+          return parsed;
+        }
+      }
     } catch {}
-    return [];
+    return [DEFAULT_PARENT_QUOTA];
   });
   const [loading, setLoading] = useState(false);
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
@@ -155,6 +178,17 @@ export function InstanceUsageMonitorView({
     return null;
   });
 
+  // Launch genuine parent Antigravity executable via Tauri
+  const handleLaunchParent = async () => {
+    try {
+      if (isTauri()) {
+        await invoke('launch_parent_app', { variant: 'app' });
+      }
+    } catch (err) {
+      console.error('Failed to launch parent app:', err);
+    }
+  };
+
   // Re-render time-ago badge every 30 seconds
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -162,16 +196,25 @@ export function InstanceUsageMonitorView({
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch all quotas
+  // Fetch all quotas and guarantee Black Hole Parent card is preserved
   const fetchQuotas = useCallback(async () => {
     setLoading(true);
     try {
       const data = await getAllAntigravityQuotas();
-      setQuotas(data);
+      let merged = Array.isArray(data) ? [...data] : [];
+      if (!merged.some((q) => q.instanceId === 'black_hole_parent' || q.instanceId === 'blackhole')) {
+        try {
+          const parentSingle = await getInstanceQuotaSummary('black_hole_parent');
+          merged = [parentSingle, ...merged];
+        } catch {
+          merged = [DEFAULT_PARENT_QUOTA, ...merged];
+        }
+      }
+      setQuotas(merged);
       const now = new Date();
       setLastFetchTime(now);
       try {
-        localStorage.setItem(STORAGE_QUOTAS_CACHE, JSON.stringify(data));
+        localStorage.setItem(STORAGE_QUOTAS_CACHE, JSON.stringify(merged));
         localStorage.setItem(STORAGE_QUOTAS_FETCHED_AT, now.toISOString());
       } catch {}
     } catch (err) {
@@ -200,26 +243,21 @@ export function InstanceUsageMonitorView({
     }
   };
 
-  // Only auto-fetch ONCE on initial open or if cached data is missing. Never re-trigger repeatedly on tab switching.
+  // Automatically refresh quotas on mount whenever entering Event Horizon
   useEffect(() => {
-    const cached = localStorage.getItem(STORAGE_QUOTAS_CACHE);
-    const initialized = localStorage.getItem(STORAGE_EVENT_HORIZON_INITIALIZED);
-    if (!initialized || !cached) {
-      try {
-        localStorage.setItem(STORAGE_EVENT_HORIZON_INITIALIZED, 'true');
-      } catch {}
-      fetchQuotas();
-    }
+    fetchQuotas();
   }, [fetchQuotas]);
 
-  // Sort quotas so The Black Hole Parent is always first, followed by instances alphabetically
-  const sortedQuotas = [...quotas].sort((a, b) => {
-    const isABH = a.instanceId === 'black_hole_parent' || a.instanceId === 'blackhole';
-    const isBBH = b.instanceId === 'black_hole_parent' || b.instanceId === 'blackhole';
-    if (isABH && !isBBH) return -1;
-    if (!isABH && isBBH) return 1;
-    return a.instanceName.localeCompare(b.instanceName);
-  });
+  // Guarantee The Black Hole Parent card is ALWAYS present as the very first card
+  const parentCard: InstanceQuotaResult =
+    quotas.find((q) => q.instanceId === 'black_hole_parent' || q.instanceId === 'blackhole') ||
+    DEFAULT_PARENT_QUOTA;
+
+  const satelliteCards = quotas
+    .filter((q) => q.instanceId !== 'black_hole_parent' && q.instanceId !== 'blackhole')
+    .sort((a, b) => a.instanceName.localeCompare(b.instanceName));
+
+  const sortedQuotas = [parentCard, ...satelliteCards];
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#0F1012] text-zinc-200">
@@ -305,10 +343,21 @@ export function InstanceUsageMonitorView({
                       </div>
 
                       <div className="text-[11px] text-[#7D818C] font-mono mt-1 flex items-center gap-2">
-                        {item.accountEmail ? (
-                          <span className={`${isBlackHole ? 'text-purple-300 font-medium' : 'text-zinc-300'} font-sans`}>{item.accountEmail}</span>
+                        {isBlackHole ? (
+                          item.accountEmail ? (
+                            <span className="text-purple-300 font-medium font-sans">{item.accountEmail}</span>
+                          ) : (
+                            <span className="text-amber-400 font-medium font-sans flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+                              Not Logged In
+                            </span>
+                          )
                         ) : (
-                          <span>{isBlackHole ? 'Parent Installation Account' : 'No account bound'}</span>
+                          item.accountEmail ? (
+                            <span className="text-zinc-300 font-sans">{item.accountEmail}</span>
+                          ) : (
+                            <span>No account bound</span>
+                          )
                         )}
                         <span>·</span>
                         <span className="uppercase text-[10px] text-zinc-500">
@@ -403,25 +452,37 @@ export function InstanceUsageMonitorView({
                   {isNoToken && (
                     <div className="flex-1 flex flex-col justify-center my-auto py-4">
                       <div className="py-8 px-4 bg-[#0F1013] border border-dashed border-[#23252E] rounded-xl flex flex-col items-center text-center space-y-3">
-                        <div className="w-10 h-10 rounded-full bg-zinc-800/80 flex items-center justify-center text-zinc-400">
-                          <LogIn className="w-5 h-5 text-zinc-400" />
+                        <div className={`w-10 h-10 rounded-full ${isBlackHole ? 'bg-purple-950/60 text-purple-400 border border-purple-800/40' : 'bg-zinc-800/80 text-zinc-400'} flex items-center justify-center`}>
+                          <LogIn className="w-5 h-5" />
                         </div>
                         <div className="space-y-1 max-w-xs">
                           <h4 className="text-xs font-semibold text-zinc-200">
-                            Login to the instance to show data
+                            {isBlackHole ? 'Not Logged In to Parent App' : 'Login to the instance to show data'}
                           </h4>
                           <p className="text-[11px] text-zinc-500 leading-relaxed">
-                            No stored OAuth token found in this profile. Launch the instance and log in with Google to view live telemetry.
+                            {isBlackHole
+                              ? 'No stored Google credentials found in the parent Antigravity profile. Launch Antigravity and sign in to view live quota telemetry.'
+                              : 'No stored OAuth token found in this profile. Launch the instance and log in with Google to view live telemetry.'}
                           </p>
                         </div>
-                        {onLaunchInstance && item.instanceId !== 'black_hole_parent' && (
+                        {isBlackHole ? (
                           <button
-                            onClick={() => onLaunchInstance(item.instanceId)}
-                            className="px-3.5 py-1.5 bg-[#18191E] hover:bg-[#22242B] border border-[#2B2E3A] text-zinc-200 text-xs font-medium rounded-lg transition flex items-center gap-1.5 cursor-pointer mt-1"
+                            onClick={handleLaunchParent}
+                            className="px-3.5 py-1.5 bg-purple-950/60 hover:bg-purple-900/60 border border-purple-700/50 text-purple-200 text-xs font-medium rounded-lg transition flex items-center gap-1.5 cursor-pointer mt-1"
                           >
-                            <Play className="w-3 h-3 text-emerald-400 fill-emerald-400" />
-                            Launch Instance
+                            <Play className="w-3 h-3 text-purple-400 fill-purple-400" />
+                            Launch Parent App
                           </button>
+                        ) : (
+                          onLaunchInstance && (
+                            <button
+                              onClick={() => onLaunchInstance(item.instanceId)}
+                              className="px-3.5 py-1.5 bg-[#18191E] hover:bg-[#22242B] border border-[#2B2E3A] text-zinc-200 text-xs font-medium rounded-lg transition flex items-center gap-1.5 cursor-pointer mt-1"
+                            >
+                              <Play className="w-3 h-3 text-emerald-400 fill-emerald-400" />
+                              Launch Instance
+                            </button>
+                          )
                         )}
                       </div>
                     </div>
@@ -471,16 +532,16 @@ export function InstanceUsageMonitorView({
                 </div>
               );
             })}
+            {satelliteCards.length === 0 && (
+              <div className="p-5 rounded-2xl border border-dashed border-[#212328] bg-[#101114]/60 flex flex-col items-center justify-center text-center space-y-2.5 min-h-[380px]">
+                <Layers className="w-8 h-8 text-zinc-700" />
+                <h4 className="text-xs font-semibold text-zinc-300">No Satellite Instances</h4>
+                <p className="text-[11px] text-zinc-500 max-w-xs leading-relaxed">
+                  The Black Hole anchor monitors your main Google Antigravity install. Create profile instances in Workspace to track additional accounts and quotas here.
+                </p>
+              </div>
+            )}
           </div>
-          {quotas.length === 0 && !loading && (
-            <div className="col-span-full py-16 text-center text-zinc-500 space-y-3">
-              <Layers className="w-10 h-10 text-zinc-700 mx-auto" />
-              <p className="text-xs">No eligible Antigravity desktop app instances found.</p>
-              <p className="text-[11px] text-zinc-600 max-w-sm mx-auto">
-                Create an instance with App Type set to "Antigravity" to monitor its live remaining quota and reset windows.
-              </p>
-            </div>
-          )}
         </div>
       </div>
     </div>
