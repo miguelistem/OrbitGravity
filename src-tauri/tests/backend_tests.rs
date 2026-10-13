@@ -1051,6 +1051,25 @@ fn test_antigravity_app_filtering_ignores_ide() {
 }
 
 #[test]
+fn test_black_hole_parent_quota_detection() {
+    let results = app_lib::quota::fetch_all_antigravity_app_quotas(&[]);
+    println!("fetch_all_antigravity_app_quotas returned {} items", results.len());
+    let parent = results.iter().find(|r| r.instance_id == "black_hole_parent");
+    assert!(parent.is_some(), "Black Hole Parent should be returned in quota results");
+    let p = parent.unwrap();
+    println!("Parent instance_id: {}", p.instance_id);
+    println!("Parent name: {}", p.instance_name);
+    println!("Parent account_email: {:?}", p.account_email);
+    println!("Parent status: {}", p.status);
+    println!("Parent quota_status: {}", p.quota_status);
+    println!("Parent groups count: {}", p.groups.len());
+    if let Some(err) = &p.error_message {
+        println!("Parent error_message: {}", err);
+    }
+}
+
+
+#[test]
 fn test_solar_system_star_naming_with_tags() {
     let inst_tagged = Instance {
         id: "inst-portfolio".to_string(),

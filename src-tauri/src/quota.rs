@@ -390,33 +390,30 @@ pub fn fetch_instance_quota(instance: &Instance) -> InstanceQuotaResult {
 pub fn fetch_all_antigravity_app_quotas(instances: &[Instance]) -> Vec<InstanceQuotaResult> {
     let mut results = Vec::new();
 
-    // Also include a virtual Black Hole Parent item if global token exists
+    // Always include the virtual Black Hole Parent item as the singularity anchor
     if let Some(home) = dirs::home_dir() {
-        let global_token = home.join(".gemini").join("jetski-standalone-oauth-token");
-        if global_token.exists() {
-            let virtual_bh = Instance {
-                id: "black_hole_parent".to_string(),
-                name: "The Black Hole (Parent Singularity)".to_string(),
-                tag: None,
-                account_id: "global-parent".to_string(),
-                mode: "auth-only".to_string(),
-                port: 0,
-                status: if crate::process::is_parent_antigravity_running() { "running".to_string() } else { "stopped".to_string() },
-                tokens_str: "Global".to_string(),
-                workspace_path: None,
-                profile_dir: home.to_string_lossy().to_string(),
-                pid: None,
-                last_used: "Active".to_string(),
-                binary_path: None,
-                custom_flags: None,
-                env_vars: None,
-                app_type: Some("antigravity".to_string()),
-                blackhole_sync: Some(true),
-                sync_mode: Some("black_hole".to_string()),
-                tier: Some("Pro".to_string()),
-            };
-            results.push(fetch_instance_quota(&virtual_bh));
-        }
+        let virtual_bh = Instance {
+            id: "black_hole_parent".to_string(),
+            name: "The Black Hole (Parent Singularity)".to_string(),
+            tag: Some("The Black Hole Singularity".to_string()),
+            account_id: "global-parent".to_string(),
+            mode: "auth-only".to_string(),
+            port: 0,
+            status: if crate::process::is_parent_antigravity_running() { "running".to_string() } else { "stopped".to_string() },
+            tokens_str: "Global".to_string(),
+            workspace_path: None,
+            profile_dir: home.to_string_lossy().to_string(),
+            pid: None,
+            last_used: "Active".to_string(),
+            binary_path: None,
+            custom_flags: None,
+            env_vars: None,
+            app_type: Some("antigravity".to_string()),
+            blackhole_sync: Some(true),
+            sync_mode: Some("black_hole".to_string()),
+            tier: Some("Pro".to_string()),
+        };
+        results.push(fetch_instance_quota(&virtual_bh));
     }
 
     for inst in instances {
