@@ -49,16 +49,22 @@ Write-Host "Configured Target Version: v$appVersion" -ForegroundColor Cyan
 # 4. Locate built artifacts
 $targetDir = Join-Path $rootDir "src-tauri\target\release"
 $bundleNsisDir = Join-Path $targetDir "bundle\nsis"
-$mainExe = Join-Path $targetDir "OrbitGravity.exe"
+$mainExe = Join-Path $targetDir "orbitgravity.exe"
+if (!(Test-Path $mainExe)) {
+    $mainExe = Join-Path $targetDir "OrbitGravity.exe"
+}
 
-$nsisExe = Get-ChildItem -Path $bundleNsisDir -Filter "*setup.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+$nsisExe = Get-ChildItem -Path $bundleNsisDir -Filter "*${appVersion}*setup.exe" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+if (!$nsisExe) {
+    $nsisExe = Get-ChildItem -Path $bundleNsisDir -Filter "*setup.exe" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+}
 
 if ($nsisExe) {
     $destSetupV = Join-Path $releaseDir "OrbitGravity_v${appVersion}_Setup.exe"
     $destSetup = Join-Path $releaseDir "OrbitGravity_${appVersion}_Setup.exe"
     Copy-Item -Path $nsisExe.FullName -Destination $destSetupV -Force
     Copy-Item -Path $nsisExe.FullName -Destination $destSetup -Force
-    Write-Host "[+] Staged One-Click Installer: OrbitGravity_v${appVersion}_Setup.exe" -ForegroundColor Green
+    Write-Host "[+] Staged One-Click Installer: OrbitGravity_v${appVersion}_Setup.exe (from $($nsisExe.Name))" -ForegroundColor Green
 } else {
     Write-Host "[!] Warning: NSIS setup executable not found in $bundleNsisDir" -ForegroundColor Yellow
 }
