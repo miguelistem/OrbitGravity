@@ -1,6 +1,6 @@
 [package]
 name = "orbitgravity"
-version = "1.0.1"
+version = "1.0.4"
 description = "Antigravity Mission Control for Windows"
 authors = ["OrbitGravity Contributors"]
 license = "MIT"
