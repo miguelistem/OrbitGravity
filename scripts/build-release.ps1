@@ -88,16 +88,11 @@ if (Test-Path $mainExe) {
     Write-Host "[+] Staged Portable Archive: OrbitGravity_v${appVersion}_Portable.zip" -ForegroundColor Green
 }
 
-# 6. Copy install and uninstall scripts with version tags
+# 6. Copy install scripts with version tags (no uninstaller distributed; uninstalls happen strictly via Windows)
 $scriptSrc = Join-Path $rootDir "scripts\install.ps1"
 if (Test-Path $scriptSrc) {
     Copy-Item -Path $scriptSrc -Destination (Join-Path $releaseDir "install_v${appVersion}.ps1") -Force
     Copy-Item -Path $scriptSrc -Destination (Join-Path $releaseDir "install.ps1") -Force
-}
-$uninstallSrc = Join-Path $rootDir "scripts\uninstall.ps1"
-if (Test-Path $uninstallSrc) {
-    Copy-Item -Path $uninstallSrc -Destination (Join-Path $releaseDir "uninstall_v${appVersion}.ps1") -Force
-    Copy-Item -Path $uninstallSrc -Destination (Join-Path $releaseDir "uninstall.ps1") -Force
 }
 
 # 7. Generate SHA256 Checksums
