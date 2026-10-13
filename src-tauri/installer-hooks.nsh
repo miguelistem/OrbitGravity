@@ -1,7 +1,8 @@
 ; ==============================================================================
 ; OrbitGravity — NSIS Installer Hooks
-; Ensures desktop shortcut creation in current-user space with clean uninstall
-; and complete removal of all Antigravity profile directories on uninstallation.
+; Ensures desktop shortcut creation in current-user space with clean uninstall.
+; NOTE: User profiles and workspaces in AntigravityProfiles are preserved
+; permanently and NEVER deleted on uninstall.
 ; ==============================================================================
 
 !macro NSIS_HOOK_POSTINSTALL
