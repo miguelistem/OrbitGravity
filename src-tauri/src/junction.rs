@@ -94,31 +94,21 @@ pub fn setup_profile_directories(raw_profile_dir: &Path, mode: &str) -> Result<(
         }
     }
 
-    // Ensure Windows user shell folders exist under isolated USERPROFILE so file pickers never error.
-    // Use dirs shell APIs so OneDrive-redirected folders (Desktop/Documents) are accurately linked.
-    let real_home = dirs::home_dir()
-        .or_else(|| std::env::var("USERPROFILE").ok().map(std::path::PathBuf::from))
-        .unwrap_or_else(|| std::path::PathBuf::from("."));
-
-    let shell_targets = [
-        ("Desktop", dirs::desktop_dir().unwrap_or_else(|| real_home.join("Desktop"))),
-        ("Documents", dirs::document_dir().unwrap_or_else(|| real_home.join("Documents"))),
-        ("Downloads", dirs::download_dir().unwrap_or_else(|| real_home.join("Downloads"))),
-    ];
-
-    for (shell_name, real_target) in shell_targets {
+    // Ensure Windows user shell folders exist as isolated local directories under USERPROFILE
+    // so file pickers never error, without ever creating junctions to real user personal folders.
+    let shell_folders = ["Desktop", "Documents", "Downloads"];
+    for shell_name in shell_folders {
         let profile_folder = profile_dir.join(shell_name);
         if !profile_folder.exists() {
-            if real_target.exists() {
-                let _ = create_junction(&profile_folder, &real_target);
-            }
-            if !profile_folder.exists() {
-                let _ = std::fs::create_dir_all(&profile_folder);
-            }
+            let _ = std::fs::create_dir_all(&profile_folder);
         }
     }
 
     // Ensure .gemini/config is linked into profile so language server finds projects, rules, and settings
+    let real_home = dirs::home_dir()
+        .or_else(|| std::env::var("USERPROFILE").ok().map(std::path::PathBuf::from))
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+
     let profile_gemini = profile_dir.join(".gemini");
     let _ = std::fs::create_dir_all(&profile_gemini);
     let profile_config = profile_gemini.join("config");
