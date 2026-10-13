@@ -200,18 +200,26 @@ export function InstanceUsageMonitorView({
     }
   };
 
-  // Only auto-fetch ONCE on the very first time the tab is opened. Never re-trigger on subsequent tab opens.
+  // Only auto-fetch ONCE on initial open or if cached data is missing. Never re-trigger repeatedly on tab switching.
   useEffect(() => {
+    const cached = localStorage.getItem(STORAGE_QUOTAS_CACHE);
     const initialized = localStorage.getItem(STORAGE_EVENT_HORIZON_INITIALIZED);
-    if (!initialized) {
+    if (!initialized || !cached) {
       try {
         localStorage.setItem(STORAGE_EVENT_HORIZON_INITIALIZED, 'true');
       } catch {}
-      if (instances.length > 0) {
-        fetchQuotas();
-      }
+      fetchQuotas();
     }
-  }, [fetchQuotas, instances.length]);
+  }, [fetchQuotas]);
+
+  // Sort quotas so The Black Hole Parent is always first, followed by instances alphabetically
+  const sortedQuotas = [...quotas].sort((a, b) => {
+    const isABH = a.instanceId === 'black_hole_parent' || a.instanceId === 'blackhole';
+    const isBBH = b.instanceId === 'black_hole_parent' || b.instanceId === 'blackhole';
+    if (isABH && !isBBH) return -1;
+    if (!isABH && isBBH) return 1;
+    return a.instanceName.localeCompare(b.instanceName);
+  });
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#0F1012] text-zinc-200">
@@ -230,7 +238,7 @@ export function InstanceUsageMonitorView({
                 </span>
               </h1>
               <p className="text-xs text-[#808493] mt-0.5">
-                Real-time Antigravity token limits, 5-hour quota recharge, and weekly resets.
+                Real-time Antigravity token limits, 5-hour quota recharge, and weekly resets across instances and Parent Singularity.
               </p>
             </div>
           </div>
@@ -253,52 +261,64 @@ export function InstanceUsageMonitorView({
         <div className="max-w-4xl mx-auto space-y-5">
           {/* Instances Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch">
-            {quotas.map((item) => {
+            {sortedQuotas.map((item) => {
               const isSingleRefreshing = refreshingId === item.instanceId;
               const isSuccess = item.quotaStatus === 'success';
               const isNoToken = item.quotaStatus === 'no_token';
               const isLicenseRequired = item.quotaStatus === 'license_required';
               const isRunning = item.status === 'running';
+              const isBlackHole = item.instanceId === 'black_hole_parent' || item.instanceId === 'blackhole';
 
               return (
                 <div
                   key={item.instanceId}
-                  className="bg-[#141519] border border-[#22242B] rounded-2xl p-5 flex flex-col justify-between hover:border-[#2E313E] transition shadow-lg shadow-black/40 w-full min-h-[380px] space-y-4"
+                  className={`${
+                    isBlackHole
+                      ? 'bg-gradient-to-b from-[#181326] to-[#12101B] border-purple-500/40 hover:border-purple-400/70 ring-1 ring-purple-500/20 shadow-purple-950/30'
+                      : 'bg-[#141519] border-[#22242B] hover:border-[#2E313E]'
+                  } border rounded-2xl p-5 flex flex-col justify-between transition shadow-lg w-full min-h-[380px] space-y-4`}
                 >
                   {/* Card Header */}
                   <div className="flex items-start justify-between gap-3 pb-3.5 border-b border-[#212328]">
                     <div>
                       <div className="flex items-center gap-2.5">
-                        <span className="text-sm font-bold text-zinc-100 block">
-                          {item.instanceName}
+                        <span className={`text-sm font-bold block ${isBlackHole ? 'text-purple-200' : 'text-zinc-100'}`}>
+                          {isBlackHole ? 'The Black Hole (Parent App)' : item.instanceName}
                         </span>
-                        <span
-                          className={`text-[10px] font-mono px-2 py-0.5 rounded-full flex items-center gap-1.5 font-semibold ${
-                            isRunning
-                              ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/60'
-                              : 'bg-[#18191E] text-zinc-400 border border-[#23252E]'
-                          }`}
-                        >
-                          <span className={`w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-600'}`} />
-                          {isRunning ? 'RUNNING' : 'STOPPED'}
-                        </span>
+                        {isBlackHole ? (
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full flex items-center gap-1.5 font-semibold bg-purple-950/60 text-purple-300 border border-purple-800/60">
+                            <span className={`w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-purple-400 animate-pulse' : 'bg-purple-600'}`} />
+                            {isRunning ? 'PARENT ACTIVE' : 'PARENT STANDBY'}
+                          </span>
+                        ) : (
+                          <span
+                            className={`text-[10px] font-mono px-2 py-0.5 rounded-full flex items-center gap-1.5 font-semibold ${
+                              isRunning
+                                ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/60'
+                                : 'bg-[#18191E] text-zinc-400 border border-[#23252E]'
+                            }`}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-600'}`} />
+                            {isRunning ? 'RUNNING' : 'STOPPED'}
+                          </span>
+                        )}
                       </div>
 
                       <div className="text-[11px] text-[#7D818C] font-mono mt-1 flex items-center gap-2">
                         {item.accountEmail ? (
-                          <span className="text-zinc-300 font-sans">{item.accountEmail}</span>
+                          <span className={`${isBlackHole ? 'text-purple-300 font-medium' : 'text-zinc-300'} font-sans`}>{item.accountEmail}</span>
                         ) : (
-                          <span>No account bound</span>
+                          <span>{isBlackHole ? 'Parent Installation Account' : 'No account bound'}</span>
                         )}
                         <span>·</span>
                         <span className="uppercase text-[10px] text-zinc-500">
-                          {item.appType.replace('_', ' ')}
+                          {isBlackHole ? 'Singularity Root' : item.appType.replace('_', ' ')}
                         </span>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
-                      {item.instanceId !== 'black_hole_parent' && onSelectInstance && (
+                      {!isBlackHole && onSelectInstance && (
                         <button
                           onClick={() => onSelectInstance(item.instanceId)}
                           className="px-2.5 py-1 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-[#1E2028] rounded-lg transition cursor-pointer"
@@ -311,9 +331,9 @@ export function InstanceUsageMonitorView({
                         onClick={() => handleRefreshSingle(item.instanceId)}
                         disabled={isSingleRefreshing}
                         className="p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-[#1E2028] rounded-lg transition cursor-pointer disabled:opacity-50"
-                        title="Refresh this instance quota"
+                        title={isBlackHole ? "Refresh parent app quota" : "Refresh this instance quota"}
                       >
-                        <RotateCw className={`w-3.5 h-3.5 ${isSingleRefreshing ? 'animate-spin text-orange-400' : ''}`} />
+                        <RotateCw className={`w-3.5 h-3.5 ${isSingleRefreshing ? 'animate-spin text-purple-400' : ''}`} />
                       </button>
                     </div>
                   </div>

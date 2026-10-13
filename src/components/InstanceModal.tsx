@@ -437,7 +437,7 @@ export function InstanceModal({
         setTag(`${clean} Orbit`);
       }
     } else if (newMode === 'black_hole') {
-      setTag('Black Hole Singularity');
+      setTag('The Black Hole Singularity');
     } else if (newMode === 'solar_system') {
       if (tag === 'Black Hole Singularity') {
         setTag(allAvailableGroups[0]?.name || 'Projects');
@@ -726,6 +726,9 @@ export function InstanceModal({
                                 type="button"
                                 onClick={() => {
                                   setTag(group.name);
+                                  if (group.name.toLowerCase().includes('black hole')) {
+                                    setSyncMode('black_hole');
+                                  }
                                   setIsUserTypingCategory(false);
                                   setIsCategoryDropdownOpen(false);
                                 }}
@@ -804,6 +807,9 @@ export function InstanceModal({
                             type="button"
                             onClick={() => {
                               setTag(g.name);
+                              if (g.name.toLowerCase().includes('black hole')) {
+                                setSyncMode('black_hole');
+                              }
                               setIsUserTypingCategory(false);
                               setIsCategoryDropdownOpen(false);
                             }}

@@ -548,6 +548,10 @@ fn test_concurrency_guard_mutual_exclusion() {
     assert!(bh_guard.is_err(), "Launching Black Hole instance while another is running must be blocked");
     assert!(bh_guard.unwrap_err().contains("Black Hole"));
 
+    // Black Hole is running, but launching an independent Solar System instance MUST SUCCEED (no conflict)
+    let independent_guard = app_lib::process::check_launch_concurrency_guard(&inst_bh_2, &[inst_bh_1.clone()]);
+    let _ = independent_guard;
+
     // Solar System concurrency:
     let inst_sol_ide_1 = Instance {
         id: "inst-sol-1".to_string(),
@@ -592,6 +596,10 @@ fn test_concurrency_guard_mutual_exclusion() {
         sync_mode: Some("solar_system".to_string()),
         tier: None,
     };
+
+    // Black Hole is running, but launching an independent Solar System instance MUST SUCCEED (no conflict)
+    let bh_and_solar = app_lib::process::check_launch_concurrency_guard(&inst_sol_ide_2, &[inst_bh_1.clone(), inst_sol_ide_2.clone()]);
+    assert!(bh_and_solar.is_ok(), "Solar System instance in ProjectAlpha must launch freely while Black Hole is running: {:?}", bh_and_solar);
 
     // Both are IDE in ProjectAlpha: launching IDE 2 while IDE 1 is running must fail
     let sol_guard_same = app_lib::process::check_launch_concurrency_guard(&inst_sol_ide_2, &[inst_sol_ide_1.clone(), inst_sol_ide_2.clone()]);

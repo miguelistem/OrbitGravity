@@ -18,9 +18,15 @@ pub struct ConversationInfo {
 /// Resolves the Solar System category/group name for an instance.
 /// Prioritizes instance.tag, falling back to non-default parent folder name, and finally "General Workspaces".
 pub fn get_instance_solar_group(inst: &Instance) -> String {
+    if inst.blackhole_sync == Some(true) || inst.sync_mode.as_deref() == Some("black_hole") {
+        return "The Black Hole Singularity".to_string();
+    }
     if let Some(ref t) = inst.tag {
         let trimmed = t.trim();
         if !trimmed.is_empty() {
+            if trimmed.to_lowercase().contains("black hole") {
+                return "The Black Hole Singularity".to_string();
+            }
             return trimmed.to_string();
         }
     }

@@ -18,11 +18,13 @@
   ; Clean up Desktop Shortcut upon uninstallation
   Delete "$DESKTOP\OrbitGravity.lnk"
 
-  ; Clean up all Antigravity profiles and shared brains created by OrbitGravity
-  RMDir /r "$PROFILE\AntigravityProfiles"
-
-  ; Clean up OrbitGravity and BetterMultigravity application state and telemetry
-  RMDir /r "$LOCALAPPDATA\BetterMultigravity"
+  ; Clean up application state and telemetry
   RMDir /r "$LOCALAPPDATA\OrbitGravity"
   RMDir /r "$APPDATA\OrbitGravity"
+
+  ; Prompt user before deleting saved Antigravity profiles and fleet state
+  MessageBox MB_YESNO|MB_ICONQUESTION "Do you also want to permanently delete all Antigravity instance profiles, shared brains, and saved fleet state?" IDNO keep_profiles
+    RMDir /r "$PROFILE\AntigravityProfiles"
+    RMDir /r "$LOCALAPPDATA\BetterMultigravity"
+  keep_profiles:
 !macroend

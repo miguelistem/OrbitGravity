@@ -1,4 +1,3 @@
-use std::path::Path;
 use sysinfo::{ProcessesToUpdate, System, Pid, ProcessRefreshKind};
 use crate::models::Instance;
 use crate::junction::setup_profile_directories;
@@ -267,55 +266,44 @@ pub fn check_launch_concurrency_guard(target: &Instance, all_instances: &[Instan
     check_launch_concurrency_guard_with_tracked(target, all_instances, None)
 }
 
+pub fn is_instance_blackhole(inst: &Instance) -> bool {
+    inst.blackhole_sync == Some(true)
+        || inst.sync_mode.as_deref() == Some("black_hole")
+        || crate::conversations::get_instance_solar_group(inst).to_lowercase().contains("black hole")
+}
+
 pub fn check_launch_concurrency_guard_with_tracked(
     target: &Instance,
     all_instances: &[Instance],
     tracked_parent_pids: Option<&[u32]>,
 ) -> Result<(), String> {
-    let is_blackhole = target.blackhole_sync == Some(true) || target.sync_mode.as_deref() == Some("black_hole");
+    let target_is_blackhole = is_instance_blackhole(target);
 
-    if is_blackhole {
+    if target_is_blackhole {
         if is_parent_antigravity_running_with_tracked(tracked_parent_pids) {
             return Err("Parent Antigravity application is currently running. Please close the parent application before launching a Black Hole tethered instance.".to_string());
         }
 
         for inst in all_instances {
-            if inst.id != target.id && inst.status == "running" {
-                if inst.blackhole_sync == Some(true) || inst.sync_mode.as_deref() == Some("black_hole") {
-                    return Err(format!(
-                        "Instance '{}' is currently running tethered to The Black Hole. Stop it before launching another Black Hole instance.",
-                        inst.name
-                    ));
-                }
+            if inst.id != target.id && inst.status == "running" && is_instance_blackhole(inst) {
+                return Err(format!(
+                    "Instance '{}' is currently running tethered to The Black Hole Singularity. Stop it before launching another instance in this orbit.",
+                    inst.name
+                ));
             }
         }
     } else if target.sync_mode.as_deref() != Some("solo") {
-        let target_group = if let Some(parent) = Path::new(&target.profile_dir).parent() {
-            let p_name = parent.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            if p_name.to_lowercase() != "antigravityprofiles" && !p_name.is_empty() {
-                p_name.to_string()
-            } else {
-                "General".to_string()
-            }
-        } else {
-            "General".to_string()
-        };
-
+        let target_group = crate::conversations::get_instance_solar_group(target);
         let target_app_type = target.app_type.as_deref().unwrap_or("antigravity_ide");
 
         for inst in all_instances {
             if inst.id != target.id && inst.status == "running" {
-                let inst_group = if let Some(parent) = Path::new(&inst.profile_dir).parent() {
-                    let p_name = parent.file_name().and_then(|n| n.to_str()).unwrap_or("");
-                    if p_name.to_lowercase() != "antigravityprofiles" && !p_name.is_empty() {
-                        p_name.to_string()
-                    } else {
-                        "General".to_string()
-                    }
-                } else {
-                    "General".to_string()
-                };
+                // Instances tethered to Black Hole or in solo mode do not share or conflict with this Solar System's brain
+                if is_instance_blackhole(inst) || inst.sync_mode.as_deref() == Some("solo") {
+                    continue;
+                }
 
+                let inst_group = crate::conversations::get_instance_solar_group(inst);
                 let inst_app_type = inst.app_type.as_deref().unwrap_or("antigravity_ide");
 
                 if inst_group.eq_ignore_ascii_case(&target_group) && inst_app_type == target_app_type {

@@ -278,12 +278,29 @@ pub fn create_instance(
     let resolved_ws = profile_dir_str.clone();
     let _ = std::fs::create_dir_all(&profile_path);
 
+    let is_bh_tag = input.tag.as_deref().map(|t| t.to_lowercase()).map(|t| t.contains("black hole")).unwrap_or(false);
+    let resolved_bh_sync = if is_bh_tag || input.sync_mode.as_deref() == Some("black_hole") || input.blackhole_sync == Some(true) {
+        Some(true)
+    } else {
+        input.blackhole_sync
+    };
+    let resolved_sync_mode = if is_bh_tag || input.sync_mode.as_deref() == Some("black_hole") || input.blackhole_sync == Some(true) {
+        Some("black_hole".to_string())
+    } else {
+        input.sync_mode.or_else(|| Some("solar_system".to_string()))
+    };
+    let resolved_tag = if is_bh_tag || resolved_sync_mode.as_deref() == Some("black_hole") {
+        Some("The Black Hole Singularity".to_string())
+    } else {
+        input.tag
+    };
+
     let app_type = input.app_type.unwrap_or_else(|| "antigravity_ide".to_string());
 
     let new_instance = Instance {
         id: format!("inst-{}", &Uuid::new_v4().to_string()[..8]),
         name: input.name,
-        tag: input.tag,
+        tag: resolved_tag,
         account_id: acc_id,
         mode: instance_mode,
         port: assigned_port,
@@ -297,14 +314,8 @@ pub fn create_instance(
         custom_flags: input.custom_flags,
         env_vars: input.env_vars,
         app_type: Some(app_type),
-        blackhole_sync: input.blackhole_sync,
-        sync_mode: input.sync_mode.or_else(|| {
-            if input.blackhole_sync == Some(true) {
-                Some("black_hole".to_string())
-            } else {
-                Some("solar_system".to_string())
-            }
-        }),
+        blackhole_sync: resolved_bh_sync,
+        sync_mode: resolved_sync_mode,
         tier: input.tier.or(Some("Pro".to_string())),
     };
 
@@ -1284,6 +1295,33 @@ pub fn get_all_antigravity_quotas(state: State<'_, AppState>) -> Result<Vec<crat
 
 #[tauri::command]
 pub fn get_instance_quota_summary(state: State<'_, AppState>, id: String) -> Result<crate::quota::InstanceQuotaResult, String> {
+    if id == "black_hole_parent" || id == "blackhole" {
+        if let Some(home) = dirs::home_dir() {
+            let virtual_bh = Instance {
+                id: "black_hole_parent".to_string(),
+                name: "The Black Hole (Parent Singularity)".to_string(),
+                tag: Some("The Black Hole Singularity".to_string()),
+                account_id: "global-parent".to_string(),
+                mode: "auth-only".to_string(),
+                port: 0,
+                status: if crate::process::is_parent_antigravity_running() { "running".to_string() } else { "stopped".to_string() },
+                tokens_str: "Global".to_string(),
+                workspace_path: None,
+                profile_dir: home.to_string_lossy().to_string(),
+                pid: None,
+                last_used: "Active".to_string(),
+                binary_path: None,
+                custom_flags: None,
+                env_vars: None,
+                app_type: Some("antigravity".to_string()),
+                blackhole_sync: Some(true),
+                sync_mode: Some("black_hole".to_string()),
+                tier: Some("Pro".to_string()),
+            };
+            return Ok(crate::quota::fetch_instance_quota(&virtual_bh));
+        }
+    }
+
     let fleet = state.fleet.lock().map_err(|e| e.to_string())?;
     let instance = fleet.instances.iter().find(|i| i.id == id)
         .ok_or_else(|| format!("Instance with id '{}' not found", id))?;
@@ -1321,12 +1359,15 @@ pub fn list_available_groups(state: State<'_, AppState>) -> Result<Vec<crate::mo
         }
     }
 
-    // 1. Gather all groups currently assigned to solar system instances
+    // 1. Gather all groups currently assigned to solar system instances, collecting Black Hole members
+    let mut bh_members = Vec::new();
     for inst in &fleet.instances {
-        if inst.sync_mode.as_deref() == Some("solo")
-            || inst.sync_mode.as_deref() == Some("black_hole")
-            || inst.blackhole_sync == Some(true)
-        {
+        if inst.sync_mode.as_deref() == Some("solo") {
+            continue;
+        }
+
+        if crate::process::is_instance_blackhole(inst) {
+            bh_members.push(inst.name.clone());
             continue;
         }
 
@@ -1375,8 +1416,20 @@ pub fn list_available_groups(state: State<'_, AppState>) -> Result<Vec<crate::mo
         })
         .collect();
 
-    // Sort by instance_count descending, then alphabetical name
+    // Sort solar systems by instance_count descending, then alphabetical name
     result.sort_by(|a, b| b.instance_count.cmp(&a.instance_count).then_with(|| a.name.cmp(&b.name)));
+
+    // Insert The Black Hole Singularity at the very beginning as the central Solar System Anchor
+    let home_gemini = dirs::home_dir().map(|h| h.join(".gemini")).unwrap_or_default();
+    let has_bh_brain = home_gemini.exists();
+    let bh_group = crate::models::AvailableGroup {
+        name: "The Black Hole Singularity".to_string(),
+        instance_count: bh_members.len(),
+        instances: bh_members,
+        has_shared_brain: has_bh_brain,
+    };
+    result.insert(0, bh_group);
+
     Ok(result)
 }
 
