@@ -1,10 +1,10 @@
 [package]
 name = "orbitgravity"
-version = "1.0.0"
+version = "1.0.1"
 description = "Antigravity Mission Control for Windows"
 authors = ["OrbitGravity Contributors"]
 license = "MIT"
-repository = "https://github.com/orbitgravity/orbitgravity"
+repository = "https://github.com/miguelistem/OrbitGravity"
 edition = "2024"
 rust-version = "1.90"
 

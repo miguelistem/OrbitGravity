@@ -7,7 +7,7 @@
 .USAGE
     powershell -ExecutionPolicy Bypass -File install.ps1
     OR via terminal one-liner:
-    irm https://raw.githubusercontent.com/orbitgravity/orbitgravity/main/scripts/install.ps1 | iex
+    irm https://raw.githubusercontent.com/miguelistem/OrbitGravity/main/scripts/install.ps1 | iex
 #>
 
 [CmdletBinding()]
@@ -52,7 +52,7 @@ if (Test-Path $localBin) {
     Copy-Item -Path $localBin -Destination (Join-Path $installDir "OrbitGravity.exe") -Force
 } else {
     Write-Host "[+] Fetching OrbitGravity $Version from GitHub Releases..." -ForegroundColor Green
-    $repo = "orbitgravity/orbitgravity"
+    $repo = "miguelistem/OrbitGravity"
     $apiUrl = if ($Version -eq "latest") {
         "https://api.github.com/repos/$repo/releases/latest"
     } else {

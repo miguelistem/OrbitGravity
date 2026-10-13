@@ -41,6 +41,11 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Host "[OK] Tauri compilation finished successfully!" -ForegroundColor Green
 
+# Read dynamic application version from configuration
+$tauriConf = Get-Content (Join-Path $rootDir "src-tauri\tauri.conf.json") -Raw | ConvertFrom-Json
+$appVersion = $tauriConf.version
+Write-Host "Configured Target Version: v$appVersion" -ForegroundColor Cyan
+
 # 4. Locate built artifacts
 $targetDir = Join-Path $rootDir "src-tauri\target\release"
 $bundleNsisDir = Join-Path $targetDir "bundle\nsis"
@@ -49,9 +54,11 @@ $mainExe = Join-Path $targetDir "OrbitGravity.exe"
 $nsisExe = Get-ChildItem -Path $bundleNsisDir -Filter "*setup.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
 
 if ($nsisExe) {
-    $destSetup = Join-Path $releaseDir "OrbitGravity_1.0.0_Setup.exe"
+    $destSetupV = Join-Path $releaseDir "OrbitGravity_v${appVersion}_Setup.exe"
+    $destSetup = Join-Path $releaseDir "OrbitGravity_${appVersion}_Setup.exe"
+    Copy-Item -Path $nsisExe.FullName -Destination $destSetupV -Force
     Copy-Item -Path $nsisExe.FullName -Destination $destSetup -Force
-    Write-Host "[+] Staged One-Click Installer: OrbitGravity_1.0.0_Setup.exe" -ForegroundColor Green
+    Write-Host "[+] Staged One-Click Installer: OrbitGravity_v${appVersion}_Setup.exe" -ForegroundColor Green
 } else {
     Write-Host "[!] Warning: NSIS setup executable not found in $bundleNsisDir" -ForegroundColor Yellow
 }
@@ -67,19 +74,23 @@ if (Test-Path $mainExe) {
     Copy-Item -Path (Join-Path $rootDir "README.md") -Destination $tempPortableDir -Force -ErrorAction SilentlyContinue
     Copy-Item -Path (Join-Path $rootDir "INDEPTH_README.md") -Destination $tempPortableDir -Force -ErrorAction SilentlyContinue
     
-    $portableZip = Join-Path $releaseDir "OrbitGravity_1.0.0_Portable.zip"
-    Compress-Archive -Path "$tempPortableDir\*" -DestinationPath $portableZip -Force
+    $portableZipV = Join-Path $releaseDir "OrbitGravity_v${appVersion}_Portable.zip"
+    $portableZip = Join-Path $releaseDir "OrbitGravity_${appVersion}_Portable.zip"
+    Compress-Archive -Path "$tempPortableDir\*" -DestinationPath $portableZipV -Force
+    Copy-Item -Path $portableZipV -Destination $portableZip -Force
     Remove-Item $tempPortableDir -Recurse -Force
-    Write-Host "[+] Staged Portable Archive: OrbitGravity_1.0.0_Portable.zip" -ForegroundColor Green
+    Write-Host "[+] Staged Portable Archive: OrbitGravity_v${appVersion}_Portable.zip" -ForegroundColor Green
 }
 
-# 6. Copy install.ps1 and uninstall.ps1 to release directory
+# 6. Copy install and uninstall scripts with version tags
 $scriptSrc = Join-Path $rootDir "scripts\install.ps1"
 if (Test-Path $scriptSrc) {
+    Copy-Item -Path $scriptSrc -Destination (Join-Path $releaseDir "install_v${appVersion}.ps1") -Force
     Copy-Item -Path $scriptSrc -Destination (Join-Path $releaseDir "install.ps1") -Force
 }
 $uninstallSrc = Join-Path $rootDir "scripts\uninstall.ps1"
 if (Test-Path $uninstallSrc) {
+    Copy-Item -Path $uninstallSrc -Destination (Join-Path $releaseDir "uninstall_v${appVersion}.ps1") -Force
     Copy-Item -Path $uninstallSrc -Destination (Join-Path $releaseDir "uninstall.ps1") -Force
 }
 
@@ -101,7 +112,7 @@ Write-Host "==========================================================" -Foregro
 Write-Host " [SUCCESS] Release artifacts generated in: release\" -ForegroundColor White
 Write-Host "==========================================================" -ForegroundColor Green
 Get-ChildItem -Path $releaseDir | ForEach-Object {
-    Write-Host (" - {0,-32} ({1:N2} MB)" -f $_.Name, ($_.Length / 1MB)) -ForegroundColor Cyan
+    Write-Host (" - {0,-36} ({1:N2} MB)" -f $_.Name, ($_.Length / 1MB)) -ForegroundColor Cyan
 }
 Write-Host ""
-Write-Host "Ready for GitHub Release tag v1.0.0! 🪐⚡" -ForegroundColor White
+Write-Host "Ready for GitHub Release tag v${appVersion}! 🪐⚡" -ForegroundColor White
