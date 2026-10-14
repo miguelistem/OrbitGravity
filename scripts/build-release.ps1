@@ -24,7 +24,7 @@ if (Test-Path $releaseDir) {
 New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
 
 # 2. Run test harness
-Write-Host "[1/4] Running automated test harness (42 tests)..." -ForegroundColor Yellow
+Write-Host "[1/4] Running automated test harness (48 tests)..." -ForegroundColor Yellow
 $testResult = cargo test --manifest-path src-tauri/Cargo.toml --test backend_tests
 if ($LASTEXITCODE -ne 0) {
     Write-Host "[-] Error: Backend tests failed! Release build aborted." -ForegroundColor Red

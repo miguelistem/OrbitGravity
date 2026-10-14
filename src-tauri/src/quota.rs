@@ -79,45 +79,188 @@ pub fn format_reset_time_difference(reset_time_iso: &str) -> String {
     }
 }
 
-/// Discovers the path to the stored OAuth token for an instance.
-pub fn find_oauth_token_path(instance: &Instance) -> Option<PathBuf> {
-    let p = Path::new(&instance.profile_dir);
-    let direct = p.join(".gemini").join("jetski-standalone-oauth-token");
-    if direct.exists() {
-        return Some(direct);
+/// Helper to execute curl with System32 preference and strict connection/execution timeouts.
+pub fn execute_curl(args: &[&str]) -> Result<std::process::Output, String> {
+    let mut candidates = Vec::new();
+    if let Ok(sys_root) = std::env::var("SystemRoot") {
+        candidates.push(PathBuf::from(sys_root).join("System32").join("curl.exe"));
+    }
+    candidates.push(PathBuf::from(r"C:\Windows\System32\curl.exe"));
+    candidates.push(PathBuf::from("curl.exe"));
+
+    let mut last_err = None;
+    for cand in &candidates {
+        if cand.as_os_str() == "curl.exe" || cand.exists() {
+            let mut cmd = crate::process::silent_command(cand);
+            cmd.args(args);
+            match cmd.output() {
+                Ok(out) => return Ok(out),
+                Err(e) => last_err = Some(e),
+            }
+        }
     }
 
-    // Check Black Hole fallback if tethered or if querying the parent singularity
+    Err(format!("Failed to execute curl: {:?}", last_err))
+}
+
+/// Fallback extraction of Google user email from Antigravity's local app storage.
+pub fn extract_email_from_app_storage() -> Option<String> {
+    let mut candidate_dirs = Vec::new();
+    if let Some(cfg) = dirs::config_dir() {
+        candidate_dirs.push(cfg);
+    }
+    if let Ok(ad) = std::env::var("APPDATA") {
+        let pb = PathBuf::from(ad);
+        if !candidate_dirs.contains(&pb) {
+            candidate_dirs.push(pb);
+        }
+    }
+    if let Some(loc) = dirs::data_local_dir() {
+        candidate_dirs.push(loc);
+    }
+    if let Ok(lad) = std::env::var("LOCALAPPDATA") {
+        let pb = PathBuf::from(lad);
+        if !candidate_dirs.contains(&pb) {
+            candidate_dirs.push(pb);
+        }
+    }
+
+    for base in &candidate_dirs {
+        for app_folder in &["Antigravity", "antigravity", "Antigravity IDE", "antigravity-ide"] {
+            let storage_file = base.join(app_folder).join("app_storage.json");
+            if storage_file.exists() {
+                if let Ok(content) = std::fs::read_to_string(&storage_file) {
+                    if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(&content) {
+                        if let Some(user) = json_val.get("jetski.onboarding.lastLoginUsername").and_then(|v| v.as_str()) {
+                            if user.contains('@') {
+                                return Some(user.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Discovers the path to the stored OAuth token for an instance.
+pub fn find_oauth_token_path(instance: &Instance) -> Option<PathBuf> {
+    let file_names = [
+        "jetski-standalone-oauth-token",
+        "oauth-token",
+        "oauth_token",
+        "oauth-token.json",
+        "oauth_token.json",
+        "token.json",
+        "credentials.json",
+    ];
+
+    // 1. Direct profile path and immediate subdirectories
+    let p = Path::new(&instance.profile_dir);
+    let profile_candidates = [
+        p.to_path_buf(),
+        p.join(".gemini"),
+        p.join(".gemini").join("antigravity"),
+        p.join(".gemini").join("antigravity-ide"),
+        p.join(".antigravity"),
+        p.join(".antigravity-ide"),
+        p.join("data"),
+        p.join("data").join(".gemini"),
+    ];
+
+    for dir in &profile_candidates {
+        for fname in &file_names {
+            let candidate = dir.join(fname);
+            if candidate.exists() && candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+    }
+
+    // 2. Global / Parent Singularity fallback directories
     let is_bh = instance.id == "black_hole_parent"
         || instance.id == "blackhole"
         || instance.blackhole_sync == Some(true)
         || instance.sync_mode.as_deref() == Some("black_hole");
 
     if is_bh {
+        let mut home_roots = Vec::new();
         if let Some(home) = dirs::home_dir() {
-            let p1 = home.join(".gemini").join("jetski-standalone-oauth-token");
-            if p1.exists() {
-                return Some(p1);
+            home_roots.push(home);
+        }
+        if let Ok(userprofile) = std::env::var("USERPROFILE") {
+            let pb = PathBuf::from(userprofile);
+            if !home_roots.contains(&pb) {
+                home_roots.push(pb);
             }
-            let p2 = home.join(".antigravity").join("jetski-standalone-oauth-token");
-            if p2.exists() {
-                return Some(p2);
-            }
-            let p3 = home.join(".antigravity-ide").join("jetski-standalone-oauth-token");
-            if p3.exists() {
-                return Some(p3);
+        }
+        if let (Ok(drive), Ok(path)) = (std::env::var("HOMEDRIVE"), std::env::var("HOMEPATH")) {
+            let pb = PathBuf::from(format!("{}{}", drive, path));
+            if !home_roots.contains(&pb) {
+                home_roots.push(pb);
             }
         }
 
-        if let Ok(userprofile) = std::env::var("USERPROFILE") {
-            let pb = PathBuf::from(&userprofile);
-            let p1 = pb.join(".gemini").join("jetski-standalone-oauth-token");
-            if p1.exists() {
-                return Some(p1);
+        for root in &home_roots {
+            let home_dirs = [
+                root.join(".gemini"),
+                root.join(".gemini").join("antigravity"),
+                root.join(".gemini").join("antigravity-ide"),
+                root.join(".antigravity"),
+                root.join(".antigravity-ide"),
+                root.join(".config").join("gemini"),
+                root.join(".config").join("antigravity"),
+                root.clone(),
+            ];
+            for dir in &home_dirs {
+                for fname in &file_names {
+                    let candidate = dir.join(fname);
+                    if candidate.exists() && candidate.is_file() {
+                        return Some(candidate);
+                    }
+                }
             }
-            let p2 = pb.join(".antigravity").join("jetski-standalone-oauth-token");
-            if p2.exists() {
-                return Some(p2);
+        }
+
+        let mut appdata_roots = Vec::new();
+        if let Some(roaming) = dirs::config_dir().or_else(dirs::data_dir) {
+            appdata_roots.push(roaming);
+        }
+        if let Ok(ad) = std::env::var("APPDATA") {
+            let pb = PathBuf::from(ad);
+            if !appdata_roots.contains(&pb) {
+                appdata_roots.push(pb);
+            }
+        }
+        if let Some(local) = dirs::data_local_dir() {
+            appdata_roots.push(local);
+        }
+        if let Ok(lad) = std::env::var("LOCALAPPDATA") {
+            let pb = PathBuf::from(lad);
+            if !appdata_roots.contains(&pb) {
+                appdata_roots.push(pb);
+            }
+        }
+
+        for root in &appdata_roots {
+            let app_dirs = [
+                root.join("Antigravity"),
+                root.join("antigravity"),
+                root.join("Antigravity IDE"),
+                root.join("antigravity-ide"),
+                root.join(".gemini"),
+                root.join("Programs").join("antigravity"),
+                root.join("Programs").join("Antigravity IDE"),
+                root.join("Google").join("Antigravity"),
+            ];
+            for dir in &app_dirs {
+                for fname in &file_names {
+                    let candidate = dir.join(fname);
+                    if candidate.exists() && candidate.is_file() {
+                        return Some(candidate);
+                    }
+                }
             }
         }
     }
@@ -218,25 +361,24 @@ pub fn ensure_valid_access_token(token_path: &Path) -> Result<String, String> {
 
     // Try testing current access token against the quota endpoint first
     if !access_token.is_empty() {
-        if let Ok(output) = crate::process::silent_command("curl.exe")
-            .args([
-                "-s",
-                "-w", "\n%{http_code}",
-                "-X", "POST",
-                QUOTA_ENDPOINT,
-                "-H", &format!("Authorization: Bearer {}", access_token),
-                "-H", "Content-Type: application/json",
-                "-H", "User-Agent: antigravity",
-                "-d", "{}",
-            ])
-            .output()
-        {
+        if let Ok(output) = execute_curl(&[
+            "-s",
+            "--connect-timeout", "6",
+            "--max-time", "15",
+            "-w", "\n%{http_code}",
+            "-X", "POST",
+            QUOTA_ENDPOINT,
+            "-H", &format!("Authorization: Bearer {}", access_token),
+            "-H", "Content-Type: application/json",
+            "-H", "User-Agent: antigravity",
+            "-d", "{}",
+        ]) {
             let text = String::from_utf8_lossy(&output.stdout);
             let lines: Vec<&str> = text.trim().lines().collect();
             if let Some(code_str) = lines.last() {
                 if let Ok(code) = code_str.trim().parse::<u16>() {
-                    if code == 200 {
-                        // Current token is active and valid!
+                    // 200 = Active & licensed; 403 = Active token, but license required
+                    if code == 200 || code == 403 {
                         return Ok(access_token);
                     }
                 }
@@ -254,27 +396,29 @@ pub fn ensure_valid_access_token(token_path: &Path) -> Result<String, String> {
         CLIENT_ID, get_client_secret(), refresh_token
     );
 
-    let output = crate::process::silent_command("curl.exe")
-        .args([
-            "-s",
-            "-X", "POST",
-            TOKEN_ENDPOINT,
-            "-H", "Content-Type: application/x-www-form-urlencoded",
-            "-d", &form_body,
-        ])
-        .output()
-        .map_err(|e| format!("Failed to execute token refresh command: {}", e))?;
+    let output = execute_curl(&[
+        "-s",
+        "--connect-timeout", "6",
+        "--max-time", "15",
+        "-X", "POST",
+        TOKEN_ENDPOINT,
+        "-H", "Content-Type: application/x-www-form-urlencoded",
+        "-d", &form_body,
+    ]).map_err(|e| format!("Failed to execute token refresh command: {}", e))?;
 
     let res_text = String::from_utf8_lossy(&output.stdout);
     let res_json: serde_json::Value = serde_json::from_str(&res_text)
         .map_err(|_| format!("Failed to parse refresh response: {}", res_text))?;
 
     if let Some(new_access_token) = res_json.get("access_token").and_then(|v| v.as_str()) {
-        // Save fresh access token back to file to persist it
+        // Save fresh access token (and fresh id_token if returned) back to file
         if let Some(token_obj) = val.get_mut("token").and_then(|t| t.as_object_mut()) {
             token_obj.insert("access_token".to_string(), serde_json::Value::String(new_access_token.to_string()));
-            let _ = std::fs::write(token_path, serde_json::to_string_pretty(&val).unwrap_or_default());
         }
+        if let Some(new_id_tok) = res_json.get("id_token").and_then(|v| v.as_str()) {
+            val["id_token"] = serde_json::Value::String(new_id_tok.to_string());
+        }
+        let _ = std::fs::write(token_path, serde_json::to_string_pretty(&val).unwrap_or_default());
         Ok(new_access_token.to_string())
     } else {
         let err_desc = res_json.get("error_description").and_then(|v| v.as_str()).unwrap_or("Token refresh rejected");
@@ -302,10 +446,12 @@ pub fn fetch_instance_quota(instance: &Instance) -> InstanceQuotaResult {
         fetched_at: now_str,
     };
 
-    // Locate token path
+    // Locate token path across profile and system locations
     let token_path = match find_oauth_token_path(instance) {
         Some(p) => p,
         None => {
+            // Check fallback email from app_storage even if token is absent
+            result.account_email = extract_email_from_app_storage();
             result.quota_status = "no_token".to_string();
             result.error_message = Some("No OAuth credentials found in this profile. Login to the instance to show data.".to_string());
             return result;
@@ -313,34 +459,41 @@ pub fn fetch_instance_quota(instance: &Instance) -> InstanceQuotaResult {
     };
 
     // Extract user info
-    let (email, name) = extract_user_info_from_token_file(&token_path);
-    result.account_email = email;
+    let (mut email, name) = extract_user_info_from_token_file(&token_path);
+    if email.is_none() {
+        email = extract_email_from_app_storage();
+    }
+    result.account_email = email.clone();
     result.account_name = name;
 
     // Ensure valid access token
     let access_token = match ensure_valid_access_token(&token_path) {
         Ok(tok) => tok,
         Err(e) => {
-            result.quota_status = "no_token".to_string();
-            result.error_message = Some(format!("Authentication session expired. Login to the instance to refresh credentials. ({})", e));
+            // NOTE: A token file exists, so this is NOT "no_token"! It is an authentication/refresh error.
+            result.quota_status = "error".to_string();
+            result.error_message = Some(format!(
+                "Stored credentials found for {}, but session refresh failed: {}. Launch Antigravity to refresh authentication.",
+                email.as_deref().unwrap_or("profile"),
+                e
+            ));
             return result;
         }
     };
 
     // Query retrieveUserQuotaSummary
-    let output = match crate::process::silent_command("curl.exe")
-        .args([
-            "-s",
-            "-w", "\n%{http_code}",
-            "-X", "POST",
-            QUOTA_ENDPOINT,
-            "-H", &format!("Authorization: Bearer {}", access_token),
-            "-H", "Content-Type: application/json",
-            "-H", "User-Agent: antigravity",
-            "-d", "{}",
-        ])
-        .output()
-    {
+    let output = match execute_curl(&[
+        "-s",
+        "--connect-timeout", "6",
+        "--max-time", "15",
+        "-w", "\n%{http_code}",
+        "-X", "POST",
+        QUOTA_ENDPOINT,
+        "-H", &format!("Authorization: Bearer {}", access_token),
+        "-H", "Content-Type: application/json",
+        "-H", "User-Agent: antigravity",
+        "-d", "{}",
+    ]) {
         Ok(o) => o,
         Err(e) => {
             result.quota_status = "error".to_string();

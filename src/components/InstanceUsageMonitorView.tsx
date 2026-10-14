@@ -206,8 +206,12 @@ export function InstanceUsageMonitorView({
         try {
           const parentSingle = await getInstanceQuotaSummary('black_hole_parent');
           merged = [parentSingle, ...merged];
-        } catch {
-          merged = [DEFAULT_PARENT_QUOTA, ...merged];
+        } catch (pErr) {
+          merged = [{
+            ...DEFAULT_PARENT_QUOTA,
+            quotaStatus: 'error',
+            errorMessage: pErr instanceof Error ? pErr.message : String(pErr),
+          }, ...merged];
         }
       }
       setQuotas(merged);
@@ -219,6 +223,19 @@ export function InstanceUsageMonitorView({
       } catch {}
     } catch (err) {
       console.error('Failed to load quota summaries:', err);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      setQuotas((prev) =>
+        prev.map((q) => {
+          if (q.instanceId === 'black_hole_parent' || q.instanceId === 'blackhole') {
+            return {
+              ...q,
+              quotaStatus: 'error' as const,
+              errorMessage: errMsg,
+            };
+          }
+          return q;
+        })
+      );
     } finally {
       setLoading(false);
     }
@@ -238,6 +255,10 @@ export function InstanceUsageMonitorView({
       });
     } catch (err) {
       console.error(`Failed to refresh quota for instance ${instanceId}:`, err);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      setQuotas((prev) =>
+        prev.map((q) => (q.instanceId === instanceId ? { ...q, quotaStatus: 'error' as const, errorMessage: errMsg } : q))
+      );
     } finally {
       setRefreshingId(null);
     }
@@ -448,8 +469,27 @@ export function InstanceUsageMonitorView({
                     </div>
                   )}
 
+                  {/* Body Case 1.5: Initial Detection in Progress */}
+                  {loading && !lastFetchTime && !isSuccess && (
+                    <div className="flex-1 flex flex-col justify-center my-auto py-8">
+                      <div className="py-8 px-4 bg-[#0F1013] border border-[#23252E] rounded-xl flex flex-col items-center text-center space-y-3">
+                        <div className="w-10 h-10 rounded-full bg-purple-950/60 text-purple-400 border border-purple-800/40 flex items-center justify-center animate-spin">
+                          <RotateCw className="w-5 h-5" />
+                        </div>
+                        <div className="space-y-1 max-w-xs">
+                          <h4 className="text-xs font-semibold text-zinc-200">
+                            Connecting to Antigravity Singularity...
+                          </h4>
+                          <p className="text-[11px] text-zinc-500 leading-relaxed">
+                            Detecting Google credentials and querying Code Assist quota telemetry...
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Body Case 2: Not Authenticated / No Token */}
-                  {isNoToken && (
+                  {isNoToken && (!loading || lastFetchTime) && (
                     <div className="flex-1 flex flex-col justify-center my-auto py-4">
                       <div className="py-8 px-4 bg-[#0F1013] border border-dashed border-[#23252E] rounded-xl flex flex-col items-center text-center space-y-3">
                         <div className={`w-10 h-10 rounded-full ${isBlackHole ? 'bg-purple-950/60 text-purple-400 border border-purple-800/40' : 'bg-zinc-800/80 text-zinc-400'} flex items-center justify-center`}>
@@ -457,22 +497,36 @@ export function InstanceUsageMonitorView({
                         </div>
                         <div className="space-y-1 max-w-xs">
                           <h4 className="text-xs font-semibold text-zinc-200">
-                            {isBlackHole ? 'Not Logged In to Parent App' : 'Login to the instance to show data'}
+                            {isBlackHole
+                              ? (item.accountEmail ? 'Parent Session Unsynchronized' : 'Parent Antigravity Credentials Required')
+                              : 'Login to the instance to show data'}
                           </h4>
                           <p className="text-[11px] text-zinc-500 leading-relaxed">
                             {isBlackHole
-                              ? 'No stored Google credentials found in the parent Antigravity profile. Launch Antigravity and sign in to view live quota telemetry.'
+                              ? (item.accountEmail
+                                  ? `Account ${item.accountEmail} detected in Antigravity storage. Launch Antigravity to refresh live quota telemetry.`
+                                  : 'No stored Google credentials found in the parent Antigravity profile. Launch Antigravity and sign in to view live quota telemetry.')
                               : 'No stored OAuth token found in this profile. Launch the instance and log in with Google to view live telemetry.'}
                           </p>
                         </div>
                         {isBlackHole ? (
-                          <button
-                            onClick={handleLaunchParent}
-                            className="px-3.5 py-1.5 bg-purple-950/60 hover:bg-purple-900/60 border border-purple-700/50 text-purple-200 text-xs font-medium rounded-lg transition flex items-center gap-1.5 cursor-pointer mt-1"
-                          >
-                            <Play className="w-3 h-3 text-purple-400 fill-purple-400" />
-                            Launch Parent App
-                          </button>
+                          <div className="flex items-center gap-2 mt-1">
+                            <button
+                              onClick={handleLaunchParent}
+                              className="px-3.5 py-1.5 bg-purple-950/60 hover:bg-purple-900/60 border border-purple-700/50 text-purple-200 text-xs font-medium rounded-lg transition flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <Play className="w-3 h-3 text-purple-400 fill-purple-400" />
+                              Launch Parent App
+                            </button>
+                            <button
+                              onClick={() => handleRefreshSingle(item.instanceId)}
+                              disabled={isSingleRefreshing}
+                              className="px-3 py-1.5 bg-[#18191E] hover:bg-[#22242B] border border-[#2B2E3A] text-zinc-300 hover:text-white text-xs font-medium rounded-lg transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                            >
+                              <RotateCw className={`w-3 h-3 ${isSingleRefreshing ? 'animate-spin text-purple-400' : ''}`} />
+                              Check Again
+                            </button>
+                          </div>
                         ) : (
                           onLaunchInstance && (
                             <button
@@ -489,7 +543,7 @@ export function InstanceUsageMonitorView({
                   )}
 
                   {/* Body Case 3: License Required */}
-                  {isLicenseRequired && (
+                  {isLicenseRequired && (!loading || lastFetchTime) && (
                     <div className="flex-1 flex flex-col justify-center my-auto py-4">
                       <div className="p-4 bg-amber-950/20 border border-amber-800/40 rounded-xl flex items-start gap-3.5">
                         <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
@@ -498,7 +552,7 @@ export function InstanceUsageMonitorView({
                             Subscription Required
                           </h4>
                           <p className="text-[11px] text-amber-200/70 leading-relaxed">
-                            This Google account does not have an active Gemini Code Assist license. Connect a licensed account to view live quotas.
+                            {item.accountEmail ? `Account ${item.accountEmail} does not have an active Gemini Code Assist license.` : 'This Google account does not have an active Gemini Code Assist license.'} Connect a licensed account to view live quotas.
                           </p>
                         </div>
                       </div>
@@ -506,17 +560,36 @@ export function InstanceUsageMonitorView({
                   )}
 
                   {/* Body Case 4: Other Error */}
-                  {item.quotaStatus === 'error' && (
+                  {item.quotaStatus === 'error' && (!loading || lastFetchTime) && (
                     <div className="flex-1 flex flex-col justify-center my-auto py-4">
                       <div className="p-4 bg-rose-950/20 border border-rose-800/40 rounded-xl flex items-start gap-3.5">
                         <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
-                        <div className="space-y-1">
+                        <div className="space-y-1.5 flex-1 min-w-0">
                           <h4 className="text-xs font-semibold text-rose-300">
-                            Failed to Retrieve Quota
+                            Telemetry Session Error
                           </h4>
-                          <p className="text-[11px] text-rose-200/70 leading-relaxed break-all">
+                          <p className="text-[11px] text-rose-200/80 leading-relaxed break-words">
                             {item.errorMessage || 'Unknown error occurred while contacting Google service.'}
                           </p>
+                          <div className="flex items-center gap-2 pt-1">
+                            {isBlackHole && (
+                              <button
+                                onClick={handleLaunchParent}
+                                className="px-3 py-1 bg-purple-950/60 hover:bg-purple-900/60 border border-purple-700/50 text-purple-200 text-xs font-medium rounded-lg transition flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <Play className="w-3 h-3 text-purple-400 fill-purple-400" />
+                                Launch Parent App
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleRefreshSingle(item.instanceId)}
+                              disabled={isSingleRefreshing}
+                              className="px-3 py-1 bg-[#18191E] hover:bg-[#22242B] border border-[#2B2E3A] text-zinc-300 hover:text-white text-xs font-medium rounded-lg transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                            >
+                              <RotateCw className={`w-3 h-3 ${isSingleRefreshing ? 'animate-spin text-purple-400' : ''}`} />
+                              Retry Quota Sync
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>

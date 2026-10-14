@@ -1300,30 +1300,33 @@ pub fn get_all_antigravity_quotas(state: State<'_, AppState>) -> Result<Vec<crat
 #[tauri::command]
 pub fn get_instance_quota_summary(state: State<'_, AppState>, id: String) -> Result<crate::quota::InstanceQuotaResult, String> {
     if id == "black_hole_parent" || id == "blackhole" {
-        if let Some(home) = dirs::home_dir() {
-            let virtual_bh = Instance {
-                id: "black_hole_parent".to_string(),
-                name: "The Black Hole (Parent Singularity)".to_string(),
-                tag: Some("The Black Hole Singularity".to_string()),
-                account_id: "global-parent".to_string(),
-                mode: "auth-only".to_string(),
-                port: 0,
-                status: if crate::process::is_parent_antigravity_running() { "running".to_string() } else { "stopped".to_string() },
-                tokens_str: "Global".to_string(),
-                workspace_path: None,
-                profile_dir: home.to_string_lossy().to_string(),
-                pid: None,
-                last_used: "Active".to_string(),
-                binary_path: None,
-                custom_flags: None,
-                env_vars: None,
-                app_type: Some("antigravity".to_string()),
-                blackhole_sync: Some(true),
-                sync_mode: Some("black_hole".to_string()),
-                tier: Some("Pro".to_string()),
-            };
-            return Ok(crate::quota::fetch_instance_quota(&virtual_bh));
-        }
+        let home_path = dirs::home_dir()
+            .map(|h| h.to_string_lossy().to_string())
+            .or_else(|| std::env::var("USERPROFILE").ok())
+            .unwrap_or_default();
+
+        let virtual_bh = Instance {
+            id: "black_hole_parent".to_string(),
+            name: "The Black Hole (Parent Singularity)".to_string(),
+            tag: Some("The Black Hole Singularity".to_string()),
+            account_id: "global-parent".to_string(),
+            mode: "auth-only".to_string(),
+            port: 0,
+            status: if crate::process::is_parent_antigravity_running() { "running".to_string() } else { "stopped".to_string() },
+            tokens_str: "Global".to_string(),
+            workspace_path: None,
+            profile_dir: home_path,
+            pid: None,
+            last_used: "Active".to_string(),
+            binary_path: None,
+            custom_flags: None,
+            env_vars: None,
+            app_type: Some("antigravity".to_string()),
+            blackhole_sync: Some(true),
+            sync_mode: Some("black_hole".to_string()),
+            tier: Some("Pro".to_string()),
+        };
+        return Ok(crate::quota::fetch_instance_quota(&virtual_bh));
     }
 
     let fleet = state.fleet.lock().map_err(|e| e.to_string())?;
